@@ -1,10 +1,10 @@
-module dht22_cntr #(
+module dht22_driver #(
         parameter CLK_FREQ = 100000000
     )(
     input  logic clk,
     input  logic arstn,
-    input  logic dht22_in,
     input  logic start_read,
+    input  logic dht22_in,
     output logic dht22_out,
     output logic dht22_dir, // 1 in 0 out
     output logic sys_idle,
@@ -51,50 +51,50 @@ module dht22_cntr #(
     always_ff @(posedge clk or negedge arstn) begin
         if (!arstn) begin
             state_dht22 <= idle;
+            rest_cnt <= 0;
         end else begin
-            case (state_dht22)
-                idle: begin
-                    if (start_read) begin
-                        state_dht22 <= trigger_start;
-                        rest_cnt <= 1;
-                    end
-                end
-                trigger_start: begin
-                    rest_cnt <= 0;
-                    if (cnt == clk_2_ms) begin
-                        rest_cnt <= 1;
-                        state_dht22 <= release_host;
-                    end
-                end
-                release_host: begin
-                    if (meta_dht22[3] == 0) begin
-                        state_dht22 <= start_dev_low;
-                    end
-                end
-                start_dev_low: begin
-                    if (meta_dht22[3] == 1) begin
-                        state_dht22 <= start_dev_hight;
-                    end
-                end
-                start_dev_hight: begin
-                    if (meta_dht22[3] == 0) begin
-                        state_dht22 <= reciving;
-                    end
-                end
-                reciving: begin
-                    if (meta_dht22[3]) begin
+            if (start_read) begin // reset state machine -> start_read
+                state_dht22 <= trigger_start;
+                rest_cnt <= 1;
+            end else begin
+                case (state_dht22)
+                    trigger_start: begin
                         rest_cnt <= 0;
-                    end else begin
-                        rest_cnt <= 1;
+                        if (cnt == clk_2_ms) begin
+                            rest_cnt <= 1;
+                            state_dht22 <= release_host;
+                        end
                     end
-                    if (n_bits == 40) begin
+                    release_host: begin
+                        if (meta_dht22[3] == 0) begin
+                            state_dht22 <= start_dev_low;
+                        end
+                    end
+                    start_dev_low: begin
+                        if (meta_dht22[3] == 1) begin
+                            state_dht22 <= start_dev_hight;
+                        end
+                    end
+                    start_dev_hight: begin
+                        if (meta_dht22[3] == 0) begin
+                            state_dht22 <= reciving;
+                        end
+                    end
+                    reciving: begin
+                        if (meta_dht22[3]) begin
+                            rest_cnt <= 0;
+                        end else begin
+                            rest_cnt <= 1;
+                        end
+                        if (n_bits == 40) begin
+                            state_dht22 <= idle;
+                        end
+                    end
+                    default: begin
                         state_dht22 <= idle;
                     end
-                end
-                default: begin
-                    state_dht22 <= idle;
-                end
-            endcase
+                endcase
+            end
         end
     end
 
@@ -120,7 +120,7 @@ module dht22_cntr #(
         end
     end
 
-    always_comb negedge_dht22 <= meta_dht22[3] & !meta_dht22[2];
+    always_comb negedge_dht22 <= meta_dht22[3] & ~meta_dht22[2];
 
     always_comb begin
         humidity <= data_dht22[39:24];
