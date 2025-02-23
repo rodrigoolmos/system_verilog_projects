@@ -257,9 +257,6 @@ module tb_top_dht22;
                     generate_dht22_data(data_humidity, data_temperature, data_parity);
                 end
 
-                $display("All tests passed");
-                #1000us;
-                $stop;
             end
 
             // score board
@@ -272,7 +269,11 @@ module tb_top_dht22;
                     end
             end
 
-        join
+        join_any
+        
+        $display("All tests passed");
+        #1000us;
+        $stop;
     end
 
 endmodule
