@@ -4,7 +4,7 @@ module tb_top_dht22;
     timeprecision 1ps;
 
     const integer t_clk = 10;
-    const integer max_test = 5;
+    integer max_test = 5;
 
 
     bit clk;
@@ -22,7 +22,7 @@ module tb_top_dht22;
     logic[7:0] data_parity;
 
     int unsigned seed = 32'hDEADBEEF;
-    int unsigned sim_num = 0;
+    integer sim_num = 0;
     logic first_data_sended;
     logic error_transmission = 0;
 
@@ -71,6 +71,22 @@ module tb_top_dht22;
         return 0;
     endfunction
 
+    task send_bits(int unsigned n_bits, logic[15:0] bit_array);
+        for (int i=n_bits-1; i>=0; i = i - 1) begin
+            if (bit_array[i] == 0) begin
+                force dht22_in_out = 0;
+                #50us;
+                force dht22_in_out = 1;
+                #25us;
+            end else begin
+                force dht22_in_out = 0;
+                #50us;
+                force dht22_in_out = 1;
+                #70us;
+            end
+        end
+    endtask
+
     task automatic generate_dht22_error(const ref logic[15:0] data_humidity,
                                     const ref logic[15:0] data_temperature,
                                     const ref logic[7:0] data_parity);
@@ -86,19 +102,7 @@ module tb_top_dht22;
         #80us;
 
         // 16 bits RH data
-        for (int i=15; i>=0; i = i - 1) begin
-            if (data_humidity[i] == 0) begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #25us;
-            end else begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #70us;
-            end
-        end
+        send_bits(16, data_temperature);
 
         // 16 bits T data missin
 
@@ -125,49 +129,13 @@ module tb_top_dht22;
         #80us;
 
         // 16 bits RH data
-        for (int i=15; i>=0; i = i - 1) begin
-            if (data_humidity[i] == 0) begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #25us;
-            end else begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #70us;
-            end
-        end
+        send_bits(16, data_humidity);
 
         // 16 bits T data
-        for (int i=15; i>=0; i = i - 1) begin
-            if (data_temperature[i] == 0) begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #25us;
-            end else begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #70us;
-            end
-        end
+        send_bits(16, data_temperature);
 
         // 8 bits check sum
-        for (int i=7; i>=0; i = i - 1) begin
-            if (data_parity[i] == 0) begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #25us;
-            end else begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #70us;
-            end
-        end
+        send_bits(8, data_parity);
 
         force dht22_in_out = 0;
         #50us;
@@ -261,17 +229,20 @@ module tb_top_dht22;
 
             // score board
             begin
+                $display("Score board listening");
                 forever
-                    if (error_transmission == 0) begin
-                        wait(first_data_sended);
-                        @(posedge data_ready);
+                begin
+                    @(posedge data_ready);
+                    if (error_transmission == 0 && first_data_sended == 1) begin
+                        $display("New data received performing test");
                         correct_data_read();
                     end
+                end
             end
 
         join_any
-        
-        $display("All tests passed");
+
+        $display("end of simulation");
         #1000us;
         $stop;
     end
