@@ -103,17 +103,19 @@ module physical_uart#(
             bit_cnt_tx <= 0;
             bit_num_tx <= 0;
             state_tx <= TX_IDLE;
+            done_tx <= 1;
             tx <= 1;
         end else begin
             unique case (state_tx)
                 TX_IDLE: begin
                     done_tx <= 1;
                     tx <= 1;
-                    if(start_tx) 
+                    if(start_tx) begin
                         state_tx <= TX_START;
+                        done_tx <= 0;
+                    end
                 end
                 TX_START: begin
-                    done_tx <= 0;
                     tx <= 0;
                     if (bit_cnt_tx < time_bit) begin
                         bit_cnt_tx <= bit_cnt_tx + 1;
