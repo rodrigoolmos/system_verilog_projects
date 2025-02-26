@@ -13,12 +13,12 @@ module dht22_driver #(
     output logic [7:0] parity
 );
     
-    typedef enum logic[2:0] {idle, trigger_start, release_host,
-                            start_dev_low, start_dev_hight, reciving} state_t_dht22;
+    typedef enum logic[2:0] {idle, trigger_start, wait_rx, reciving} state_t_dht22;
 
     state_t_dht22 state_dht22;
 
     localparam clk_40_us = CLK_FREQ/25000;
+    localparam clk_200_us = CLK_FREQ/5000;
     localparam clk_2_ms = CLK_FREQ/500;
     logic [($clog2(CLK_FREQ/500)):0] cnt; // cnt up to 4ms
 
@@ -62,21 +62,13 @@ module dht22_driver #(
                         rest_cnt <= 0;
                         if (cnt == clk_2_ms) begin
                             rest_cnt <= 1;
-                            state_dht22 <= release_host;
+                            state_dht22 <= wait_rx;
                         end
                     end
-                    release_host: begin
-                        if (meta_dht22[3] == 0) begin
-                            state_dht22 <= start_dev_low;
-                        end
-                    end
-                    start_dev_low: begin
-                        if (meta_dht22[3] == 1) begin
-                            state_dht22 <= start_dev_hight;
-                        end
-                    end
-                    start_dev_hight: begin
-                        if (meta_dht22[3] == 0) begin
+                    wait_rx: begin
+                        rest_cnt <= 0;
+                        if (cnt == clk_200_us) begin
+                            rest_cnt <= 1;
                             state_dht22 <= reciving;
                         end
                     end
@@ -105,16 +97,15 @@ module dht22_driver #(
         end else begin
             if (state_dht22 == reciving) begin
                 if (negedge_dht22) begin
-                    if (n_bits < 40) begin
-                        n_bits <= n_bits + 1;
-                        if (cnt < clk_40_us) begin
-                            data_dht22 <= {data_dht22[38:0], 1'b0};
-                        end else begin
-                            data_dht22 <= {data_dht22[38:0], 1'b1}; 
-                        end
+                    n_bits <= n_bits + 1;
+                    if (cnt < clk_40_us) begin
+                        data_dht22 <= {data_dht22[38:0], 1'b0};
+                    end else begin
+                        data_dht22 <= {data_dht22[38:0], 1'b1}; 
                     end
                 end 
             end else begin
+                data_dht22 <= 0;
                 n_bits <= 0;
             end
         end
@@ -122,10 +113,16 @@ module dht22_driver #(
 
     always_comb negedge_dht22 <= meta_dht22[3] & ~meta_dht22[2];
 
-    always_comb begin
-        humidity <= data_dht22[39:24];
-        temperature <= data_dht22[23:8];
-        parity <= data_dht22[7:0];
+    always_ff @(posedge clk or negedge arstn) begin
+        if (!arstn) begin
+            humidity <= 0;
+            temperature <= 0;
+            parity <= 0;
+        end else if(n_bits == 40) begin
+            humidity <= data_dht22[39:24];
+            temperature <= data_dht22[23:8];
+            parity <= data_dht22[7:0];
+        end
     end
     
     always_comb sys_idle <= (state_dht22 == idle) ? 1 : 0;
