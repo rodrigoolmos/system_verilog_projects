@@ -1,30 +1,39 @@
-module tb_reg_6_8b;
+module tb_uart_cntr;
 
     timeunit 1ns;
     timeprecision 1ps;
 
-    bit           clk;
-    bit           arstn;
-    bit           rx;         
+    bit             clk;
+    bit             arstn;
+    bit             rx;         
+    bit             send_h_t;
+    bit[2:0][7:0]   humidity;
+    bit[2:0][7:0]   temperature;
+    bit[7:0]        tb_byte_tx;
+    bit             end_sim_tx = 0;
+
     logic[5:0][7:0] time_reg;
     logic           new_time;
 
+    logic           tx;
     const integer t_clk = 10;
-    bit[7:0]    tb_byte_tx;
-    bit         end_sim_tx = 0;
 
     initial
         forever 
             #(t_clk/2) clk = ~clk;
 
-    reg_6_8b #(
+    uart_cntr #(
         .baudrate(9600),
         .clk_frec(100000000)
     )dut(.clk(clk), 
          .arstn(arstn), 
          .rx(rx), 
+         .humidity(humidity),
+         .temperature(temperature),
          .time_reg(time_reg), 
-         .new_time(new_time)
+         .new_time(new_time),
+         .send_h_t(send_h_t),
+         .tx(tx)
     );
 
     // model rx <- tb tx 
@@ -175,6 +184,36 @@ module tb_reg_6_8b;
 
     // end sim
     initial begin
+
+        @(posedge arstn);
+        @(posedge clk);
+
+        send_h_t = 0;
+        humidity[2]    = 8'd01;
+        humidity[1]    = 8'd02;
+        humidity[0]    = 8'd03;
+        temperature[2] = 8'd11;
+        temperature[1] = 8'd12;
+        temperature[0] = 8'd13;
+        @(posedge clk);
+        send_h_t = 1;
+        @(posedge clk);
+        send_h_t = 0;
+        #20000us @(posedge clk);
+
+        send_h_t = 0;
+        humidity[2]    = 8'd21;
+        humidity[1]    = 8'd22;
+        humidity[0]    = 8'd23;
+        temperature[2] = 8'd31;
+        temperature[1] = 8'd32;
+        temperature[0] = 8'd33;
+        @(posedge clk);
+        send_h_t = 1;
+        @(posedge clk);
+        send_h_t = 0;
+        #15000us @(posedge clk);
+
         $display("Start simulation");
         @(posedge end_sim_tx);
         $display("End simulation");
