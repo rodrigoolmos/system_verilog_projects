@@ -40,7 +40,7 @@ module APB_template_slave #(
                 regs[i] <= i;
         end else if (psel & pwrite & penable & ~pslverr) begin
             if (reg_addr < N_REGS)
-                regs[reg_addr] <= regs[reg_addr] + pwdata;
+                regs[reg_addr] <= pwdata;
         end
     end
 
