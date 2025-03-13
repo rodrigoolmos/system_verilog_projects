@@ -1,159 +1,137 @@
+`include "agent_APB_m.sv"
+`timescale 1us/1ns
+
 module tb_APB_template_slave;
 
-    const integer t_clk = 10;
-    localparam integer N_REGS = 8;
+    // Parámetros del testbench
+    const integer t_clk    = 10;
+    localparam integer N_REGS    = 8;
     localparam integer BASE_ADDR = 8;
     localparam integer DATA_WIDTH = 32;
 
     integer n_w_r_errors = 1;
 
-    bit                     pclk;
-    bit                     presetn;
-    bit[31:0]               paddr;
-    bit[2:0]                pprot;
-    bit                     psel;
-    bit                     penable;
-    bit                     pwrite;
-    bit[DATA_WIDTH-1:0]     pwdata;
-    bit[DATA_WIDTH/8-1:0]   pstrb;
-    logic                   pready;
-    logic[DATA_WIDTH-1:0]   prdata;
-    logic                   pslverr;
+    // Instanciamos la interfaz APB
+    // Usamos DATA_WIDTH tanto para dirección como para datos (se puede ajustar según sea necesario)
+    apb_if #(DATA_WIDTH, DATA_WIDTH) apb_if_inst();
 
-    logic[DATA_WIDTH-1:0]   readed_data;
+    // Variable para almacenar datos leídos
+    logic [DATA_WIDTH-1:0] readed_data;
 
-
+    // Instanciamos el DUT (APB_template_slave)
     APB_template_slave #(
         .BASE_ADDR(BASE_ADDR),
         .DATA_WIDTH(DATA_WIDTH),
         .N_REGS(N_REGS)
     ) dut (
-        .pclk,
-        .presetn,
-        .paddr,
-        .pprot,
-        .psel,
-        .penable,
-        .pwrite,
-        .pwdata,
-        .pstrb,
-        .pready,
-        .prdata,
-        .pslverr
+        .pclk(apb_if_inst.pclk),
+        .presetn(apb_if_inst.presetn),
+        .paddr(apb_if_inst.paddr),
+        .pprot(apb_if_inst.pprot),
+        .psel(apb_if_inst.psel),
+        .penable(apb_if_inst.penable),
+        .pwrite(apb_if_inst.pwrite),
+        .pwdata(apb_if_inst.pwdata),
+        .pstrb(apb_if_inst.pstrb),
+        .pready(apb_if_inst.pready),
+        .prdata(apb_if_inst.prdata),
+        .pslverr(apb_if_inst.pslverr)
     );
 
-    task write_APB_data(input bit[31:0] data, input bit[31:0] addr);
-        paddr = addr;
-        pprot = 0;
-        psel = 1;
-        pwrite = 1;
-        pwdata = data;
-        penable = 0;
-        @(posedge pclk);
-        penable = 1;
-        @(posedge pclk);
-        penable = 0;
-        psel = 0;
-        pwrite = 0;
-    endtask
+    // Instanciamos la clase APB (maestro)
+    agent_APB_m apb_master;
 
-    task automatic read_APB_data(ref logic[31:0] data, input bit[31:0] addr);
-        paddr = addr;
-        pprot = 0;
-        psel = 1;
-        pwrite = 0;
-        penable = 0;
-        @(posedge pclk);
-        penable = 1;
-        @(posedge pclk);
-        data = prdata;
-        penable = 0;
-        psel = 0;
-        pwrite = 0;
-    endtask
+    // Generación del reloj para la interfaz APB
+    initial begin
+        apb_if_inst.pclk = 0;
+        forever #(t_clk/2) apb_if_inst.pclk = ~apb_if_inst.pclk;
+    end
 
+    // Generación del reset
+    initial begin
+        apb_if_inst.presetn = 0;
+        #100 @(posedge apb_if_inst.pclk);
+        apb_if_inst.presetn = 1;
+        @(posedge apb_if_inst.pclk);
+    end
+
+    // Función monitor para verificar señales de error (pslverr)
     function void monitor();
-        if ((paddr >= 4*N_REGS + BASE_ADDR) || (paddr < BASE_ADDR) ) begin
-            if (penable) begin
-                if (!pslverr) begin
-                    $display("Error al generar pslverr = %d, penable = %d", pslverr, penable);
+        if ((apb_if_inst.paddr >= 4*N_REGS + BASE_ADDR) || (apb_if_inst.paddr < BASE_ADDR)) begin
+            if (apb_if_inst.penable) begin
+                if (!apb_if_inst.pslverr) begin
+                    $display("Error: Se esperaba pslverr activado (0x%0h) con penable=%0d", apb_if_inst.pslverr, apb_if_inst.penable);
                     $stop();
                 end
             end else begin
-                if (pslverr) begin
-                    $display("Error pslverr = %d se genera cuando no esta habilitado penable = %d", pslverr, penable);
+                if (apb_if_inst.pslverr) begin
+                    $display("Error: pslverr=%0d se genera cuando penable=%0d no está activo", apb_if_inst.pslverr, apb_if_inst.penable);
                     $stop();
                 end
             end
         end else begin
-            if (pslverr) begin
-                $display("Error pslverr se genera cuando no debe pslverr = %d, penable = %d", pslverr, penable);
+            if (apb_if_inst.pslverr) begin
+                $display("Error: pslverr se genera inesperadamente (pslverr=%0d, penable=%0d)", apb_if_inst.pslverr, apb_if_inst.penable);
                 $stop();
             end
         end
     endfunction
 
+    // Secuencia de prueba
     initial begin
-        pclk = 0;
-        forever #(t_clk/2) pclk = ~pclk;
-    end
+        // Espera al reset y luego instancia la clase APB pasando la interfaz virtual
+        @(posedge apb_if_inst.presetn);
+        apb_master = new(apb_if_inst);
 
-    initial begin
-
-        presetn = 0;
-        #100 @ (posedge pclk);
-        presetn = 1;
-        @(posedge pclk);
-
-        fork            
-            begin
-                // escribir leer continuado
-                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i+=4) begin
-                    write_APB_data(i, i);
+        fork
+            begin : test_sequence
+                // Escrituras y lecturas continuas
+                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i += 4) begin
+                    apb_master.write_APB_data(i, i);
                 end
-                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i+=4) begin
-                    read_APB_data(readed_data, i);
-                    if (readed_data != i) begin
-                        $display("Error en la transferencia de datos dato esperado = %d dato actual = %d", i, prdata);
+                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i += 4) begin
+                    apb_master.read_APB_data(readed_data, i);
+                    if (readed_data !== i) begin
+                        $display("Error: Dato esperado = %0d, dato leído = %0d", i, readed_data);
                         $stop;
                     end
                 end
-                // escribir leer pausado
-                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i+=4) begin
-                    write_APB_data(i-BASE_ADDR, i);
-                    #50 @(posedge pclk);
+                // Escrituras y lecturas con pausas
+                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i += 4) begin
+                    apb_master.write_APB_data(i-BASE_ADDR, i);
+                    #50 @(posedge apb_if_inst.pclk);
                 end
-                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i+=4) begin
-                    read_APB_data(readed_data, i);
-                    #50 @(posedge pclk);
-                    if (readed_data != i-BASE_ADDR) begin
-                        $display("Error en la transferencia de datos dato esperado = %d dato actual = %d", i, prdata);
+                for (int i = BASE_ADDR; i < BASE_ADDR + N_REGS*4; i += 4) begin
+                    apb_master.read_APB_data(readed_data, i);
+                    #50 @(posedge apb_if_inst.pclk);
+                    if (readed_data !== i-BASE_ADDR) begin
+                        $display("Error: Dato esperado = %0d, dato leído = %0d", i-BASE_ADDR, readed_data);
                         $stop;
                     end
                 end
-                // generar escrituras y lecturas fuera de rengo
-                write_APB_data(234, BASE_ADDR - 1);
-                write_APB_data(124, BASE_ADDR + N_REGS*4);
-                read_APB_data(readed_data, BASE_ADDR - 1);
-                read_APB_data(readed_data, BASE_ADDR + N_REGS*4);
+                // Generar escrituras y lecturas fuera de rango
+                apb_master.write_APB_data(234, BASE_ADDR - 1);
+                apb_master.write_APB_data(124, BASE_ADDR + N_REGS*4);
+                apb_master.read_APB_data(readed_data, BASE_ADDR - 1);
+                apb_master.read_APB_data(readed_data, BASE_ADDR + N_REGS*4);
             end
 
-            begin
+            begin : error_counter
                 forever begin
-                    @(posedge pclk iff pslverr)
-                    n_w_r_errors = n_w_r_errors + 1;
+                    @(posedge apb_if_inst.pclk iff apb_if_inst.pslverr)
+                        n_w_r_errors = n_w_r_errors + 1;
                 end
             end
 
-            begin
+            begin : error_monitor
                 forever begin
-                    @(edge pslverr);
+                    @(posedge apb_if_inst.pslverr);
                     monitor();
                 end
             end
-
         join_any
-        $display("Errores esperados en las transferencias 4 actuales = %d", n_w_r_errors);
+
+        $display("Errores esperados en las transferencias actuales = %0d de 4", n_w_r_errors);
         $stop;
     end
 
