@@ -30,7 +30,6 @@ module tb_uart;
 
     initial begin
         // Inicializamos las señales en estado inactivo
-        agent_if.tx = 1;
         tb_if.tx = 1;
 
         // Se instancia el agente, pasándole su interface (agent_if) y el baudrate.
