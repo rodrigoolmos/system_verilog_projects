@@ -1,3 +1,5 @@
+`timescale 1us/1ns
+
 // Definición del interface UART
 interface uart_if;
     logic rx;
