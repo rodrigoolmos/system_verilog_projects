@@ -12,7 +12,7 @@ class agent_uart #(parameter int N_RECEPTIONS = 256);
     virtual uart_if uart_vif;
 
     // Arreglo para almacenar bytes leídos y otras variables
-    logic [7:0] bytes_readed[N_RECEPTIONS];
+    logic [7:0] bytes_readed[N_RECEPTIONS-1:0];
     int n_bytes_readed = 0;
     integer us_bit;
 
@@ -54,12 +54,13 @@ class agent_uart #(parameter int N_RECEPTIONS = 256);
         #us_bit;
     endtask
 
-    // Tarea para validar los bytes recibidos (por implementar)
-    task validate_rx_bytes(logic [7:0] bytes_expected[N_RECEPTIONS]);
+    // Tarea para validar los bytes recibidos
+    task validate_rx_bytes(logic [7:0] bytes_expected[N_RECEPTIONS-1:0]);
         for (int n_bytes = 0; n_bytes < n_bytes_readed; ++n_bytes) begin
             assert (bytes_expected[n_bytes] == bytes_readed[n_bytes])
                 else begin
-                    $error("Assertion  failed!");
+                    $error("Error los datos enviados y leidos no cuadran %d, %d", 
+                        bytes_expected[n_bytes], bytes_readed[n_bytes]);
                     $stop;
                 end
         end
