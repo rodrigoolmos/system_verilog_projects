@@ -7,12 +7,12 @@ interface uart_if;
 endinterface
 
 // Clase que utiliza el virtual interface
-class agent_uart;
+class agent_uart #(parameter int N_RECEPTIONS = 256);
     // Declaramos un virtual interface del tipo uart_if
     virtual uart_if uart_vif;
 
     // Arreglo para almacenar bytes leídos y otras variables
-    logic [7:0] bytes_readed[$];
+    logic [7:0] bytes_readed[N_RECEPTIONS-1:0];
     int n_bytes_readed = 0;
     integer us_bit;
 
@@ -37,7 +37,7 @@ class agent_uart;
             #us_bit;
         end
         #(us_bit / 2);
-        bytes_readed.push_back(rx_byte);
+        bytes_readed[n_bytes_readed] = rx_byte;
         n_bytes_readed++;
     endtask
 
@@ -54,10 +54,15 @@ class agent_uart;
         #us_bit;
     endtask
 
-    // Tarea para validar los bytes recibidos (por implementar)
-    task validate_rx_bytes(logic [7:0] bytes_sended[$]);
+    // Tarea para validar los bytes recibidos
+    task validate_rx_bytes(logic [7:0] bytes_expected[N_RECEPTIONS-1:0]);
         for (int n_bytes = 0; n_bytes < n_bytes_readed; ++n_bytes) begin
-            // Aquí puedes comparar bytes_readed[n_bytes] con bytes_sended[n_bytes]
+            assert (bytes_expected[n_bytes] == bytes_readed[n_bytes])
+                else begin
+                    $error("Error los datos enviados y leidos no cuadran %d, %d", 
+                        bytes_expected[n_bytes], bytes_readed[n_bytes]);
+                    $stop;
+                end
         end
     endtask
 endclass
