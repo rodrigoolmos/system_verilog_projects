@@ -15,6 +15,58 @@ interface apb_if #(parameter ADDR_WIDTH = 32, DATA_WIDTH = 32);
     logic                       pslverr;
 endinterface
 
+module apb_checker (apb_if apb);
+  // Aserción: Verifica que el inicio de transferencia se realice correctamente.
+  property apb_transfer_start;
+    @(posedge apb.pclk) disable iff (!apb.presetn)
+      (apb.psel && !apb.penable) |=> (apb.psel && apb.penable);
+  endproperty
+
+  // Aserción: Verifica la estabilidad de la dirección y la señal de control de escritura durante la transferencia.
+  property apb_signals_stability;
+    @(posedge apb.pclk) disable iff (!apb.presetn)
+      (apb.psel && apb.penable) |-> (apb.paddr == $past(apb.paddr)) && (apb.pwrite == $past(apb.pwrite));
+  endproperty
+
+  // Aserción: Verifica que, una vez iniciada la transferencia, la señal pready se active en un tiempo razonable.
+  property apb_ready_handshake;
+    @(posedge apb.pclk) disable iff (!apb.presetn)
+      (apb.psel && apb.penable) |=> ##[1:$] apb.pready;
+  endproperty
+
+  // Aserción: Verifica que penable no se active sin que psel esté activo.
+  property penable_without_psel;
+    @(posedge apb.pclk) disable iff (!apb.presetn)
+      (!apb.psel) |=> !apb.penable;
+  endproperty
+
+  // Instanciación de las aserciones
+  a_transfer_start: assert property(apb_transfer_start)
+    else begin
+      $error("ERROR: Secuencia de inicio de transferencia APB fallida.");
+      $stop;
+    end 
+
+  a_signals_stability: assert property(apb_signals_stability)
+    else begin
+      $error("ERROR: Inestabilidad en las señales APB durante la transferencia.");
+      $stop;
+    end
+
+  a_ready_handshake: assert property(apb_ready_handshake)
+    else begin 
+      $error("ERROR: Handshake de pready no cumplido en la transferencia APB.");
+      $stop;
+    end
+
+  a_penable_without_psel: assert property(penable_without_psel)
+    else begin
+      $error("ERROR: PENABLE activo sin PSEL en APB.");
+      $stop;
+    end
+
+endmodule
+
 
 class agent_APB_m;
     // Virtual interface para acceder a las señales del bus APB
@@ -23,6 +75,13 @@ class agent_APB_m;
     // Constructor que recibe el virtual interface
     function new(virtual apb_if apb_vif);
         this.apb_vif = apb_vif;
+        this.apb_vif.psel    = 0;
+        this.apb_vif.penable = 0;
+        this.apb_vif.pstrb = 4'hF;
+        this.apb_vif.paddr = 0;
+        this.apb_vif.pprot = 0;
+        this.apb_vif.pwdata = 0;
+        this.apb_vif.pwrite = 0;
     endfunction
 
     // Tarea para escribir datos en el bus APB
@@ -58,4 +117,7 @@ class agent_APB_m;
         apb_vif.psel    = 0;
         apb_vif.pwrite  = 0;
     endtask
+
+
+
 endclass
