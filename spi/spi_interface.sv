@@ -1,3 +1,5 @@
+// CPHA = 1
+// CPOL = 1
 module spi_interface #(
     parameter CLK_FREC = 100000000,
     parameter SCL_FREC = 1000000
