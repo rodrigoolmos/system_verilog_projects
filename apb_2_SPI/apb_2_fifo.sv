@@ -35,6 +35,8 @@ module apb_2_fifo #(
     localparam ADDR_WRITE_TX        = 2'b00;
     localparam ADDR_READ_RX_STATUS  = 2'b01;
     localparam ADDR_READ_RX_DATA    = 2'b10;
+    localparam ADDR_WRITE_BYTES     = 2'b11;
+
 
     localparam N_REGS_ADDR          = 3;
 
@@ -57,7 +59,12 @@ module apb_2_fifo #(
     logic                       empty_rx;
     logic                       read_fifo_rx;
 
-    logic [3:0] reg_addr;
+    logic [3:0]                 reg_addr;
+
+
+    logic[7:0]                  n_bytes_2_recive;
+    logic[7:0]                  bytes_recived;
+    logic                       load_n_bytes_2_send;
 
     /*******************      RX      *********************/
     // Logica escritura fifo rx
@@ -164,7 +171,7 @@ module apb_2_fifo #(
     // Señal de transferencia realizada
     always_comb pready = penable & psel;
     // Error si la dirección está fuera de rango
-    always_comb pslverr = (paddr < BASE_ADDR || paddr > BASE_ADDR + 4*(N_REGS_ADDR-1)) & penable;
+    always_comb pslverr = (paddr < BASE_ADDR || paddr > BASE_ADDR + 4*(N_REGS_ADDR)) & penable;
     // calculate reg @drres base on paddr
     always_comb reg_addr = paddr - BASE_ADDR;
 
@@ -181,5 +188,24 @@ module apb_2_fifo #(
             prdata = 0;
         end
     end
+
+
+    // Load an compute bytes to recive
+    always_comb load_n_bytes_2_send = psel & pwrite & penable & ~pslverr & (reg_addr[3:2] == ADDR_WRITE_BYTES);
+
+    always_ff @(posedge pclk or negedge presetn) begin
+        if (!presetn) begin
+            n_bytes_2_recive <= 0;
+            bytes_recived <= 0;
+        end else if (load_n_bytes_2_send) begin
+            n_bytes_2_recive <= pwdata;
+            bytes_recived <= 0;
+        end else if (write_fifo_rx) begin
+            if (bytes_recived < n_bytes_2_recive) begin
+                bytes_recived <= bytes_recived + 1;
+            end
+        end
+    end
+
 
 endmodule

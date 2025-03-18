@@ -30,6 +30,8 @@ module apb_2_SPI #(
     logic       system_idle;
     logic       empty_tx;
     logic [7:0] byte_2_send;
+    logic [7:0] receive_byte;
+    logic       new_byte;
 
     apb_2_fifo #(
         .BASE_ADDR(BASE_ADDR),
@@ -59,10 +61,10 @@ module apb_2_SPI #(
         .fifo_r_data_tx(byte_2_send),
 
         // fifo out rx TODO
-        .write_fifo_rx(),
+        .write_fifo_rx(new_byte),
         .full_rx(),                     // not connected
         .almost_full_rx(),              // not connected
-        .fifo_w_data_rx()
+        .fifo_w_data_rx(receive_byte)
     );
 
     always_comb send_byte = system_idle & ~empty_tx;
@@ -76,9 +78,9 @@ module apb_2_SPI #(
         .byte_send(byte_2_send),
         .byte_receive(),
         .send_byte(send_byte),
-        .receive_byte(),
+        .receive_byte(receive_byte),
         .system_idle(system_idle),
-        .new_byte(),
+        .new_byte(new_byte),
         .miso(miso),
         .mosi(mosi),
         .scl(scl),
