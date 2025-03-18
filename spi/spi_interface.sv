@@ -14,6 +14,7 @@ module spi_interface #(
     input  logic        send_byte,
     input  logic        receive_byte,
     output logic        system_idle,
+    output logic        new_byte,
 
     // spi signals
     input  logic        miso,
@@ -90,11 +91,11 @@ module spi_interface #(
         end
     end
 
-    always_comb begin
-        scl <= (clk_div < HALF_CNT) || (bits_cnt >= 8) ? 1 : 0;
-        sample_data_miso <= (clk_div == (MAX_CNT - 1)) && (bits_cnt < 8) ? 1 : 0;
-        system_idle <= (bits_cnt < 9) ? 0 : 1;
-        set_data_mosi <= (clk_div == HALF_CNT) && (bits_cnt < 8) ? 1 : 0;            
-    end
+
+    always_comb scl <= (clk_div < HALF_CNT) || (bits_cnt >= 8) ? 1 : 0;
+    always_comb sample_data_miso <= (clk_div == (MAX_CNT - 1)) && (bits_cnt < 8) ? 1 : 0;
+    always_comb system_idle <= (bits_cnt < 9) ? 0 : 1;
+    always_comb set_data_mosi <= (clk_div == HALF_CNT) && (bits_cnt < 8) ? 1 : 0;            
+    always_comb new_byte <= system_idle & ~system_idle_ff;
     
 endmodule

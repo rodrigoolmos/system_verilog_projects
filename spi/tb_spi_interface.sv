@@ -15,6 +15,7 @@ module tb_spi_interface;
     logic send_byte;
     logic receive_byte;
     logic system_idle;
+    logic new_byte;
 
     logic miso;
     logic mosi;
@@ -37,6 +38,7 @@ module tb_spi_interface;
         .send_byte(send_byte),
         .receive_byte(receive_byte),
         .system_idle(system_idle),
+        .new_byte(new_byte),
         .miso(miso),
         .mosi(mosi),
         .scl(scl),
