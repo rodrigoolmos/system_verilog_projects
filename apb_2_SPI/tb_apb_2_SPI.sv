@@ -103,14 +103,14 @@ module tb_apb_2_SPI;
     end
 
     initial begin
-        generate_data_mosi(32, 1);
+        generate_data_mosi(1, 1);
         generate_data_miso(71, 1);
 
         // Se instancia los agentes
         agent_APB_m_h = new(apb_if_inst);
     
         @(posedge apb_if_inst.presetn);
-        repeat(10) @(posedge apb_if_inst.pclk);
+        repeat(100) @(posedge apb_if_inst.pclk);
 
         agent_APB_m_h.write_APB_data(8, ADDR_WRITE_BYTES_RECIVE);
         for (int i=0; i<16; ++i) begin
