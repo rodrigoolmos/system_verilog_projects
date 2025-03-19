@@ -9,12 +9,10 @@ module spi_interface #(
     input  logic        arstn,
 
     // control signals
-    input  logic[7:0]   byte_send,
-    output logic[7:0]   byte_receive,
-    input  logic        send_byte,
-    input  logic        receive_byte,
-    output logic        system_idle,
-    output logic        new_byte,
+    input  logic[7:0]   byte_2_send,        // byte to send
+    output logic[7:0]   byte_received,      // byte received
+    output logic        new_byte,           // new byte received or ready sent
+    input  logic        ena_spi,            // enable spi
 
     // spi signals
     input  logic        miso,
@@ -26,76 +24,92 @@ module spi_interface #(
     const int HALF_CNT = MAX_CNT/2;
 
     logic[$clog2(CLK_FREC/SCL_FREC)-1:0] clk_div;
-    logic[3:0] bits_cnt;
-    logic set_data_mosi;
-    logic sample_data_miso;
-    logic[7:0] byte_send_reg;
 
-    logic        system_idle_ff;
+    logic posedge_scl;
+    logic negedge_scl;
+    logic ena_clk_div;
+
+    logic[3:0] cnt_mosi;
+    logic[3:0] cnt_miso;
 
 
+    typedef enum logic[1:0] {
+        IDLE,
+        SEND_RECEIVE,
+        WAIT_SCL
+    } state_t; state_t state_spi;
+
+
+    // CLK_DIV GENERATION
     always_ff @(posedge clk or negedge arstn) begin
-        if (!arstn)
+        if(!arstn)
             clk_div <= 0;
-        else
-            if (send_byte || receive_byte)
+        else if(ena_clk_div)
+            if (clk_div == MAX_CNT)
                 clk_div <= 0;
             else
-                if (clk_div == MAX_CNT - 1 || bits_cnt == 9)
-                    clk_div <= 0;
-                else
-                    clk_div <= clk_div + 1;
+                clk_div <= clk_div + 1;
     end
 
+    always_comb ena_clk_div = state_spi == !IDLE;
+
+    // FSM
     always_ff @(posedge clk or negedge arstn) begin
-        if (!arstn) begin
-            bits_cnt <= 9;
+        if(!arstn) begin
+            state_spi <= IDLE;
         end else begin
-            if (send_byte || receive_byte) begin
-                bits_cnt <= 0;
-            end else if (clk_div == MAX_CNT - 1) begin
-                if (bits_cnt != 9) begin
-                    bits_cnt <= bits_cnt + 1;
+            case(state_spi)
+                IDLE: begin
+                    new_byte <= 0;
+                    if(ena_spi)
+                        state_spi <= SEND_RECEIVE;
                 end
-            end
+                SEND_RECEIVE: begin
+                    new_byte <= 0;
+                    if(cnt_miso == 8 && clk_div == MAX_CNT)
+                        state_spi <= WAIT_SCL;
+                end
+                WAIT_SCL: begin
+                    if(clk_div == MAX_CNT) begin
+                        if(ena_spi)
+                            state_spi <= SEND_RECEIVE;
+                        else
+                            state_spi <= IDLE;
+                        new_byte <= 1;                        
+                    end
+
+                end
+                default: state_spi <= IDLE;
+            endcase
         end
     end
 
+    // MOSI
     always_ff @(posedge clk or negedge arstn) begin
-        if (!arstn)
-            byte_receive <= 0;
-        else
-            if (sample_data_miso)
-                byte_receive <= {miso, byte_receive[7:1]};
+        if(!arstn) begin
+            cnt_mosi <= 0;
+        end else if(state_spi == SEND_RECEIVE) begin
+            if(negedge_scl)
+                cnt_mosi <= cnt_mosi + 1;
+        end
     end
+    always_comb mosi <= byte_2_send[cnt_mosi];
 
+    // MISO
     always_ff @(posedge clk or negedge arstn) begin
-        if (!arstn)
-            mosi <= 0;
-        else
-            if (send_byte)
-                byte_send_reg <= byte_send;
-            else if (set_data_mosi) begin
-                byte_send_reg <= {1'b0, byte_send_reg[7:1]};
-                mosi <= byte_send_reg[0];
-            end
-    end
-
-    always_ff @(posedge clk or negedge arstn) begin
-        if (!arstn) begin
-            cs <= 1;
-            system_idle_ff <= 1;
-        end else begin
-            system_idle_ff <= system_idle;
-            cs <= (bits_cnt < 9) ? 0 : system_idle_ff;
+        if(!arstn) begin
+            cnt_miso <= 0;
+            byte_received <= 0;
+        end else if(state_spi == SEND_RECEIVE) begin
+            if(posedge_scl)
+                cnt_miso <= cnt_miso + 1;
+            byte_received[cnt_miso] <= miso;
         end
     end
 
 
-    always_comb scl <= (clk_div < HALF_CNT) || (bits_cnt >= 8) ? 1 : 0;
-    always_comb sample_data_miso <= (clk_div == (MAX_CNT - 1)) && (bits_cnt < 8) ? 1 : 0;
-    always_comb system_idle <= (bits_cnt < 9) ? 0 : 1;
-    always_comb set_data_mosi <= (clk_div == HALF_CNT) && (bits_cnt < 8) ? 1 : 0;            
-    always_comb new_byte <= system_idle & ~system_idle_ff;
-    
+    always_comb posedge_scl = (clk_div == HALF_CNT);
+    always_comb negedge_scl = (clk_div == 0);
+
+
 endmodule
