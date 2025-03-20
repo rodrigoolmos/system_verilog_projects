@@ -11,13 +11,14 @@ endinterface
 class agent_spi #(parameter int N_RECEPTIONS = 256);
     // Declaramos un virtual interface del tipo spi_if
     virtual spi_if spi_vif;
+    logic msb_lsb;
 
     // Arreglo para almacenar bytes leídos
     logic [7:0] bytes_readed[N_RECEPTIONS-1:0];
     int n_bytes_readed = 0;
 
     // Constructor que recibe el virtual interface y el baudrate
-    function new(virtual spi_if spi_vif);
+    function new(virtual spi_if spi_vif, logic msb_lsb);
         this.spi_vif = spi_vif;
         spi_vif.miso = 0;
     endfunction
@@ -27,7 +28,10 @@ class agent_spi #(parameter int N_RECEPTIONS = 256);
         wait(spi_vif.cs == 0);
         for (int i=0; i<8; ++i) begin
             @(posedge spi_vif.scl);
-            received_byte[i] = spi_vif.miso;
+            if (msb_lsb)
+                received_byte[7 - i] = spi_vif.mosi;
+            else
+                received_byte[i] = spi_vif.mosi;
         end
 
         bytes_readed[n_bytes_readed] = received_byte;
@@ -37,8 +41,11 @@ class agent_spi #(parameter int N_RECEPTIONS = 256);
     task send_data(logic [7:0] byte_to_send);
         wait(spi_vif.cs == 0);
         for (int i=0; i<8; ++i) begin
-            spi_vif.mosi = byte_to_send[i];
             @(negedge spi_vif.scl);
+            if (msb_lsb)
+                spi_vif.miso = byte_to_send[7 - i];
+            else
+                spi_vif.miso = byte_to_send[i];
         end
     endtask
 
