@@ -8,7 +8,7 @@ module tb_spi_interface;
     localparam N_ITERATIONS = 256;
 
     // Parámetros
-    parameter CLK_FREC = 100000000;
+    parameter CLK_FREC = 10000000;
     parameter SCL_FREC = 1000000;
     parameter NUM_TRANS_RX = 256;
 

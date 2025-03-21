@@ -9,11 +9,11 @@ module spi_interface #(
     input  logic        arstn,
 
     // control signals
-    input  logic[7:0]   byte_2_send,        // byte to send
-    output logic[7:0]   byte_received,      // byte received
-    output logic        new_byte,           // new byte received or ready sent
-    input  logic        ena_spi,            // enable spi
-    output logic        end_trans,          // end of transaction
+    input  logic[7:0]   byte_2_send,        // byte to send laches the byte when new_byte is 1
+    output logic[7:0]   byte_received,      // byte received ready when new_byte is 1
+    output logic        new_byte,           // new byte received or ready sent for sending put the new byte in byte_2_send when this signal is 1
+    input  logic        ena_spi,            // enable spi interface trsnasaction when this signal is 1 
+    output logic        end_trans,          // end of transaction lower ena_spi when end_trans 1 you dont want to send more bytes
     input  logic        msb_lsb,            // msb = 1 or lsb = 0
 
     // spi signals
@@ -21,6 +21,12 @@ module spi_interface #(
     output logic        mosi,
     output logic        scl,
     output logic        cs);
+
+    generate if (SCL_FREC *10 > CLK_FREC) begin : err_gen
+          initial
+            $fatal("ERROR: SCL_FREC * 10 > CLK_FREC");
+        end
+    endgenerate
 
     localparam MAX_CNT = (CLK_FREC/SCL_FREC) - 1;
     localparam HALF_CNT = MAX_CNT/2;
