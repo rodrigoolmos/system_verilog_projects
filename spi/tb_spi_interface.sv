@@ -52,6 +52,17 @@ module tb_spi_interface;
         .cs(spi_if_inst.cs)
     );
 
+    //checker
+    spi_checker #(
+        .CLK_FREC(CLK_FREC),
+        .SCL_FREC(SCL_FREC)
+    ) spi_checker_inst (
+        .spi(spi_if_inst),
+        .clk(clk),
+        .arstn(arstn)
+    );
+    
+    
     // Generación de reloj
     initial begin
         clk = 0;
@@ -124,19 +135,10 @@ module tb_spi_interface;
         end
     endfunction 
 
-    initial begin
-        generate_data(0, 1);
-        msb_lsb = 0;
-        // Inicialización de la clase SPI
-        agent_spi_h = new(spi_if_inst, msb_lsb);
-
-        // Inicialización de señales
-        byte_2_send = 8'hFF;
-        ena_spi = 0;
-        
-
-        @(posedge arstn);
-        repeat(200) @(posedge clk);
+    task test_msb_lsb(logic msb_lsb_param);
+        $display("Test MSB_LSB %0d", msb_lsb_param);
+        msb_lsb = msb_lsb_param;
+        agent_spi_h.set_msb_lsb(msb_lsb_param);
 
         for (int i=0; i<56; ++i) begin
             send_byte_mosi(data_sended[i]);
@@ -153,22 +155,38 @@ module tb_spi_interface;
         recive_byte_miso(8'h1);
         repeat(200) @(posedge clk);
         recive_byte_miso(8'h2);
-
+        repeat(200) @(posedge clk);
 
         continuous_recive_miso(12, 51);
         repeat(200) @(posedge clk);
-
         continuous_recive_miso(34, 123);
         repeat(200) @(posedge clk);
-
         continuous_recive_miso(61, 191);
         repeat(200) @(posedge clk);
-
         recive_byte_miso(8'h1);
         repeat(200) @(posedge clk);
+        
+        agent_spi_h.reset_cnt_bytes();
+    endtask
 
+    initial begin
+        $display("Test SPI Interface");
+        generate_data(0, 1);
+        msb_lsb = 0;
+        // Inicialización de la clase SPI
+        agent_spi_h = new(spi_if_inst, msb_lsb);
 
+        // Inicialización de señales
+        byte_2_send = 8'hFF;
+        ena_spi = 0;
+        
+        @(posedge arstn);
         repeat(200) @(posedge clk);
+
+        test_msb_lsb(0);
+        test_msb_lsb(1);
+
+        $display("End of test");
         $stop;
     end
 
