@@ -1,6 +1,6 @@
 # Validar si la variable no está vacía
 if {$top_simu == ""} {
-    error "No se especificó el nombre del módulo top.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1"
+    error "No se especificó el nombre del módulo top.!!!!!!!!!!!!!!!!"
 } else {
     puts "Simulando el módulo top: $top_simu"
 }
@@ -22,8 +22,8 @@ foreach file $sv_files {
     vlog +sv $file
 }
 
-# Carga el testbench o módulo principal en QuestaSim (sin el modo consola)
-vsim -voptargs=+acc work.$top_simu
+# Carga el testbench o módulo principal en QuestaSim, habilitando el rastreo de aserciones.
+vsim -assertdebug -voptargs=+acc work.$top_simu
 
 # Ejecuta la simulación por un tiempo específico
 run 1000ns
