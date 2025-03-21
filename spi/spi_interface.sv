@@ -51,13 +51,13 @@ module spi_interface #(
         if(!arstn)
             clk_div <= 0;
         else if(ena_clk_div)
-            if (clk_div == MAX_CNT)
+            if (clk_div == MAX_CNT || state_spi == LOAD_BYTE)
                 clk_div <= 0;
             else
                 clk_div <= clk_div + 1;
     end
 
-    always_comb ena_clk_div = (state_spi != IDLE) && (state_spi != LOAD_BYTE);
+    always_comb ena_clk_div = (state_spi != IDLE);
 
     // FSM
     always_ff @(posedge clk or negedge arstn) begin
@@ -140,12 +140,13 @@ module spi_interface #(
                 end
             end
         end else begin
+            mosi <= 0;
             cnt_mosi <= 0;
         end 
     end
 
     // SCL
-    always_comb scl = (state_spi == SEND_RECEIVE) ? (clk_div > HALF_CNT) : 1;
+    always_comb scl = (state_spi == SEND_RECEIVE) ? (clk_div >= HALF_CNT) : 1;
     always_comb posedge_scl = (state_spi == SEND_RECEIVE) ? (clk_div == HALF_CNT) : 0;
     always_comb negedge_scl = (state_spi == SEND_RECEIVE) ? (clk_div == 0) : 0;
 
