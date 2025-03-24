@@ -24,7 +24,7 @@ module apb_2_fifo #(
     output logic                      almost_empty_tx,
     output logic [DATA_WIDTH-1:0]     fifo_r_data_tx,
 
-    // fifo out rx
+    // fifo in rx
     input  logic                      write_fifo_rx,
     output logic                      full_rx,
     output logic                      almost_full_rx,
