@@ -192,33 +192,4 @@ module apb_2_fifo #(
         end
     end
 
-    //******* reception handler ********//
-    // set num reads
-    always_comb ena_write_n_reads = psel & pwrite & penable & ~pslverr & (reg_addr[3:2] == ADDR_WRITE_N_READS);
-    // reset num reads when all reads are done
-    always_comb reads_done = (reads_cnt == n_reads);
-    
-    always_ff @(posedge pclk or negedge presetn) begin
-        if (!presetn) begin
-            n_reads <= 0;
-        end else if (ena_write_n_reads) begin
-            n_reads <= pwdata - 1;
-        end else if (reads_done) begin
-            n_reads <= 0;
-        end
-    end
-
-    always_ff @(posedge pclk or negedge presetn) begin
-        if (!presetn) begin
-            reads_cnt <= 0;
-        end else if (reads_done) begin
-            reads_cnt <= 0;
-        end else if (write_fifo_rx) begin
-            reads_cnt <= reads_cnt + 1;
-        end
-    end
-
-    always_comb end_rx = reads_done;
-
-
 endmodule

@@ -37,6 +37,7 @@ module tb_apb_2_spi;
     agent_spi#(NUM_TRANS_RX) agent_spi_h;
 
     logic send_receive;
+    logic[31:0] apb_read_data;
 
     // spi if
     spi_if spi_if_inst();
@@ -54,19 +55,42 @@ module tb_apb_2_spi;
 
     task send_recive_data(int n_bytes_send, int n_bytes_recive);
         int i;
+        send_receive = 0;
         agent_APB_m_h.write_APB_data(n_bytes_recive, ADDR_WRITE_N_READS);
         for(i = 0; i < n_bytes_send; i++) begin
             agent_APB_m_h.write_APB_data(i, ADDR_WRITE_TX);
         end
-        wait_transfer(n_bytes_recive);
+        wait_transfer(n_bytes_send);
         send_receive = 1;
         for(i = 0; i < n_bytes_recive; i++) begin
             agent_spi_h.send_data(i);
         end
         #WAIT_AFTER_SPI_TIME;
         send_receive = 0;
-        #100 @(posedge apb_if_inst.pclk);
+        #1000;
+        @(posedge apb_if_inst.pclk);
     endtask
+
+    task send_data(int n_bytes_send);
+        int i;
+        send_receive = 0;
+        agent_APB_m_h.write_APB_data(0, ADDR_WRITE_N_READS);
+        for(i = 0; i < n_bytes_send; i++) begin
+            agent_APB_m_h.write_APB_data(i, ADDR_WRITE_TX);
+        end
+        wait_transfer(n_bytes_send);
+        #1000;
+        @(posedge apb_if_inst.pclk);
+    endtask
+
+    task wait_fifo_tx_empty();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        while(apb_read_data != EMPTY) begin
+            @(posedge apb_if_inst.pclk);
+            agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        end
+    endtask
+
 
     // Generación del reloj para la interfaz APB
     initial begin
@@ -116,10 +140,12 @@ module tb_apb_2_spi;
         @(posedge apb_if_inst.presetn);
         #10000 @(posedge apb_if_inst.pclk);
 
-        send_recive_data(2, 2);
-        send_recive_data(3, 3);
-        send_recive_data(4, 4);
-        send_recive_data(5, 5);
+        send_data(16);
+        wait_fifo_tx_empty();
+        send_data(16);
+        wait_fifo_tx_empty();
+        send_data(3);
+        wait_fifo_tx_empty();
 
         //wait(spi_if_inst.cs == 1'b1);
         #10000 @(posedge apb_if_inst.pclk);

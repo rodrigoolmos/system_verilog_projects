@@ -72,6 +72,11 @@ module spi_interface #(
             byte_2_send_reg <= 0;
             byte_received <= 0;
             new_byte <= 0;
+        end else if(!ena_spi) begin
+            state_spi <= IDLE;
+            byte_2_send_reg <= 0;
+            byte_received <= 0;
+            new_byte <= 0;
         end else begin
             case(state_spi)
                 IDLE: begin
@@ -152,7 +157,7 @@ module spi_interface #(
     end
 
     // SCL
-    always_comb scl = (state_spi == SEND_RECEIVE) ? (clk_div >= HALF_CNT) : 1;
+    always_comb scl = (state_spi == SEND_RECEIVE) && ena_spi ? (clk_div >= HALF_CNT) : 1;
     always_comb posedge_scl = (state_spi == SEND_RECEIVE) ? (clk_div == HALF_CNT) : 0;
     always_comb negedge_scl = (state_spi == SEND_RECEIVE) ? (clk_div == 0) : 0;
 
