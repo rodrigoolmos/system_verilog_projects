@@ -11,7 +11,6 @@ module tb_apb_2_spi;
     localparam integer FIFO_DEPTH    = 16;
     localparam integer CLK_FREC      = 100000000;   // Hz
     localparam integer SCL_FREC      = 1000000;     // Hz
-    localparam integer NUM_TRANS_RX  = 256;
 
     localparam integer BYTE_SPI_TIME          = 8000; //ns
     localparam integer WAIT_BEFORE_SPI_TIME   = 1000; //ns
@@ -31,10 +30,18 @@ module tb_apb_2_spi;
     localparam logic[3:0] EMPTY = 4'b0010;
     localparam logic[3:0] ALMOST_EMPTY = 4'b0001;
 
+    localparam integer NUM_TRANS_SEND = 1024;
+    localparam integer NUM_TRANS_RECEIVE = 64;
+
     // Instanciamos la clase APB (maestro)
     agent_APB_m agent_APB_m_h;
     // Instancia la clase SPI
-    agent_spi#(NUM_TRANS_RX) agent_spi_h;
+    agent_spi#(NUM_TRANS_SEND) agent_spi_h;
+
+    // data for test
+    logic [7:0] data_spi_send[NUM_TRANS_SEND-1:0];
+    logic [7:0] data_spi_receive[NUM_TRANS_RECEIVE-1:0];
+    integer index_data_spi_send = 0;
 
     logic send_receive;
     logic[31:0] apb_read_data;
@@ -76,7 +83,8 @@ module tb_apb_2_spi;
         send_receive = 0;
         agent_APB_m_h.write_APB_data(0, ADDR_WRITE_N_READS);
         for(i = 0; i < n_bytes_send; i++) begin
-            agent_APB_m_h.write_APB_data(i, ADDR_WRITE_TX);
+            agent_APB_m_h.write_APB_data(data_spi_send[index_data_spi_send], ADDR_WRITE_TX);
+            index_data_spi_send++;
         end
         wait_transfer(n_bytes_send);
         #1000;
@@ -91,6 +99,17 @@ module tb_apb_2_spi;
         end
     endtask
 
+    task automatic generate_data(integer seed, logic mode,ref logic [7:0] data[NUM_TRANS_SEND-1:0]);
+        begin 
+            for (int i=0; i<NUM_TRANS_SEND; ++i) begin
+                if (mode) begin
+                    data[i] = i+seed;
+                end else begin
+                    data[i] = $urandom(i+seed);
+                end
+            end
+        end
+    endtask 
 
     // Generación del reloj para la interfaz APB
     initial begin
@@ -133,24 +152,42 @@ module tb_apb_2_spi;
 
 
     initial begin
+        int num_bytes_send;
         agent_spi_h = new(spi_if_inst, 0);
         agent_APB_m_h = new(apb_if_inst);
         send_receive = 0;
 
+        generate_data(12, 1, data_spi_send);
+
         @(posedge apb_if_inst.presetn);
         #10000 @(posedge apb_if_inst.pclk);
 
-        send_data(16);
-        wait_fifo_tx_empty();
-        send_data(16);
-        wait_fifo_tx_empty();
-        send_data(3);
-        wait_fifo_tx_empty();
+        fork
+            // Proceso del agente: se queda recibiendo datos indefinidamente.
+            begin
+                forever begin
+                    agent_spi_h.recive_data();
+                end
+            end
 
-        //wait(spi_if_inst.cs == 1'b1);
-        #10000 @(posedge apb_if_inst.pclk);
+            begin
 
+                // Test 1 only send data
+                for (int i=0; i<10; ++i) begin
+                    num_bytes_send = $urandom_range(1,16);
+                    send_data(num_bytes_send);
+                    wait_fifo_tx_empty();
+                end
+                agent_spi_h.validate_received_bytes(data_spi_send);
+                
+            
+                //wait(spi_if_inst.cs == 1'b1);
+                #10000 @(posedge apb_if_inst.pclk);
+            end
+
+        join_any
         $stop;
+
     end
 
 endmodule
