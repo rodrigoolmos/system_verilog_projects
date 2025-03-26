@@ -64,7 +64,6 @@ module apb_2_fifo #(
 
 
     logic ena_write_n_reads;
-    logic reads_done;
     logic [$clog2(DEPTH):0] n_reads;
     logic [$clog2(DEPTH):0] reads_cnt;
 
@@ -169,7 +168,6 @@ module apb_2_fifo #(
     always_comb write_fifo_tx = psel & pwrite & penable & ~pslverr & (reg_addr[3:2] == ADDR_WRITE_TX);
 
 
-
     /****************** APB *****************/
     // Señal de transferencia realizada
     always_comb pready = penable & psel;
@@ -191,5 +189,27 @@ module apb_2_fifo #(
             prdata = 0;
         end
     end
+
+
+    // enable write to number of reads
+    always_comb ena_write_n_reads = psel & pwrite & penable & ~pslverr & (reg_addr[3:2] == ADDR_WRITE_N_READS);
+
+    always_ff @(posedge pclk or negedge presetn) begin
+        if (!presetn) begin
+            n_reads <= 0;
+            reads_cnt <= 0;
+        end else if (ena_write_n_reads) begin
+            n_reads <= pwdata;
+        end else if (reads_cnt < n_reads && n_reads != 0) begin
+            if (write_fifo_rx) begin
+                reads_cnt <= reads_cnt + 1;
+            end
+        end else begin
+            reads_cnt <= 0;
+            n_reads <= 0;
+        end
+    end
+
+    always_comb end_rx = n_reads == 0;
 
 endmodule

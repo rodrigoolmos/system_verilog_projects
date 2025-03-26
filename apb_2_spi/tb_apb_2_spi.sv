@@ -30,20 +30,22 @@ module tb_apb_2_spi;
     localparam logic[3:0] EMPTY = 4'b0010;
     localparam logic[3:0] ALMOST_EMPTY = 4'b0001;
 
-    localparam integer NUM_TRANS_SEND = 1024;
-    localparam integer NUM_TRANS_RECEIVE = 64;
+    localparam integer NUM_TRANS = 1024;
 
     // Instanciamos la clase APB (maestro)
     agent_APB_m agent_APB_m_h;
     // Instancia la clase SPI
-    agent_spi#(NUM_TRANS_SEND) agent_spi_h;
+    agent_spi#(NUM_TRANS) agent_spi_h;
 
     // data for test
-    logic [7:0] data_spi_send[NUM_TRANS_SEND-1:0];
-    logic [7:0] data_spi_receive[NUM_TRANS_RECEIVE-1:0];
+    logic [7:0] data_spi_mosi_send[NUM_TRANS-1:0];
+    logic [7:0] data_spi_miso_receive[NUM_TRANS-1:0];
+    logic [7:0] data_spi_miso_readed[NUM_TRANS-1:0];
     integer index_data_spi_send = 0;
+    integer index_data_spi_receive = 0;
 
-    logic send_receive;
+    logic send = 0;
+    logic receive = 0;
     logic[31:0] apb_read_data;
 
     // spi if
@@ -60,35 +62,53 @@ module tb_apb_2_spi;
         end
     endtask
 
-    task send_recive_data(int n_bytes_send, int n_bytes_recive);
+    task automatic send_recive_data(int n_bytes_send, int n_bytes_recive);
         int i;
-        send_receive = 0;
+        send = 1;
         agent_APB_m_h.write_APB_data(n_bytes_recive, ADDR_WRITE_N_READS);
         for(i = 0; i < n_bytes_send; i++) begin
-            agent_APB_m_h.write_APB_data(i, ADDR_WRITE_TX);
-        end
-        wait_transfer(n_bytes_send);
-        send_receive = 1;
-        for(i = 0; i < n_bytes_recive; i++) begin
-            agent_spi_h.send_data(i);
-        end
-        #WAIT_AFTER_SPI_TIME;
-        send_receive = 0;
-        #1000;
-        @(posedge apb_if_inst.pclk);
-    endtask
-
-    task send_data(int n_bytes_send);
-        int i;
-        send_receive = 0;
-        agent_APB_m_h.write_APB_data(0, ADDR_WRITE_N_READS);
-        for(i = 0; i < n_bytes_send; i++) begin
-            agent_APB_m_h.write_APB_data(data_spi_send[index_data_spi_send], ADDR_WRITE_TX);
+            agent_APB_m_h.write_APB_data(data_spi_mosi_send[index_data_spi_send], ADDR_WRITE_TX);
             index_data_spi_send++;
         end
         wait_transfer(n_bytes_send);
-        #1000;
-        @(posedge apb_if_inst.pclk);
+        send = 0;
+        receive = 1;
+        for(i = 0; i < n_bytes_recive; i++) begin
+            agent_spi_h.send_data(data_spi_miso_receive[index_data_spi_receive]);
+            index_data_spi_receive ++;
+        end
+        #WAIT_AFTER_SPI_TIME;
+        receive = 0;
+        wait(spi_if_inst.cs);
+        #1000 @(posedge apb_if_inst.pclk);
+    endtask
+
+    task automatic send_data(int n_bytes_send);
+        int i;
+        send = 1;
+        agent_APB_m_h.write_APB_data(0, ADDR_WRITE_N_READS);
+        for(i = 0; i < n_bytes_send; i++) begin
+            agent_APB_m_h.write_APB_data(data_spi_mosi_send[index_data_spi_send], ADDR_WRITE_TX);
+            index_data_spi_send++;
+        end
+        wait_transfer(n_bytes_send);
+        wait(spi_if_inst.cs);
+        send = 0;
+        #1000 @(posedge apb_if_inst.pclk);
+    endtask
+
+    task automatic recive_data(int n_bytes_recive);
+        int i;
+        agent_APB_m_h.write_APB_data(n_bytes_recive, ADDR_WRITE_N_READS);
+        receive = 1;
+        for(i = 0; i < n_bytes_recive; i++) begin
+            agent_spi_h.send_data(data_spi_miso_receive[index_data_spi_receive]);
+            index_data_spi_receive ++;
+        end
+        #WAIT_AFTER_SPI_TIME;
+        receive = 0;
+        wait(spi_if_inst.cs);
+        #1000 @(posedge apb_if_inst.pclk);
     endtask
 
     task wait_fifo_tx_empty();
@@ -99,9 +119,9 @@ module tb_apb_2_spi;
         end
     endtask
 
-    task automatic generate_data(integer seed, logic mode,ref logic [7:0] data[NUM_TRANS_SEND-1:0]);
+    task automatic generate_data(integer seed, logic mode,ref logic [7:0] data[NUM_TRANS-1:0]);
         begin 
-            for (int i=0; i<NUM_TRANS_SEND; ++i) begin
+            for (int i=0; i<NUM_TRANS; ++i) begin
                 if (mode) begin
                     data[i] = i+seed;
                 end else begin
@@ -109,6 +129,30 @@ module tb_apb_2_spi;
                 end
             end
         end
+    endtask 
+
+    task automatic read_mosi_rx();
+        static int i;
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+        while(apb_read_data != EMPTY) begin
+            agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_DATA);
+            data_spi_miso_readed[i] = apb_read_data[7:0];
+            agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+            i++;
+        end
+    endtask 
+
+    task automatic validate_read_mosi_rx();
+        $display("Num bytes readed by the master %d", index_data_spi_receive);
+
+        for (int i=0; i<index_data_spi_receive; ++i) begin
+            assert (data_spi_miso_readed[i] == data_spi_miso_receive[i])
+                else   begin
+                    $error("Error: data readed is not equal to data received numeber of byte %d", i);
+                    $error("Received %d, expected %d", data_spi_miso_readed[i], data_spi_miso_receive[i]);
+                 end
+        end
+
     endtask 
 
     // Generación del reloj para la interfaz APB
@@ -152,12 +196,12 @@ module tb_apb_2_spi;
 
 
     initial begin
-        int num_bytes_send;
+        int num_bytes;
         agent_spi_h = new(spi_if_inst, 0);
         agent_APB_m_h = new(apb_if_inst);
-        send_receive = 0;
 
-        generate_data(12, 1, data_spi_send);
+        generate_data(0, 1, data_spi_mosi_send);
+        generate_data(0, 1, data_spi_miso_receive);
 
         @(posedge apb_if_inst.presetn);
         #10000 @(posedge apb_if_inst.pclk);
@@ -173,15 +217,30 @@ module tb_apb_2_spi;
             begin
 
                 // Test 1 only send data
-                for (int i=0; i<10; ++i) begin
-                    num_bytes_send = $urandom_range(1,16);
-                    send_data(num_bytes_send);
-                    wait_fifo_tx_empty();
-                end
-                agent_spi_h.validate_received_bytes(data_spi_send);
+                // $display("Start test send data");
+                // for (int i=0; i<10; ++i) begin
+                //     num_bytes = $urandom_range(1,16);
+                //     send_data(num_bytes);
+                //     wait_fifo_tx_empty();
+                // end
+                // send_data(FIFO_DEPTH);                              // send FIFO_DEPTH bytes 
+                // agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);
                 
-            
-                //wait(spi_if_inst.cs == 1'b1);
+                // // Test 2 only receive data
+                // $display("Start test receive data");
+                // for (int i=0; i<10; ++i) begin
+                //     num_bytes = $urandom_range(1,16);
+                //     recive_data(num_bytes);
+                //     read_mosi_rx();
+                // end
+                // recive_data(FIFO_DEPTH);                            // receive FIFO_DEPTH bytes
+                // read_mosi_rx();
+                // validate_read_mosi_rx();
+
+                // Test 3 send and receive data
+                $display("Start test send and receive data");
+                send_recive_data(3, 2);
+
                 #10000 @(posedge apb_if_inst.pclk);
             end
 

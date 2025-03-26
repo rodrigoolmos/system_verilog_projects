@@ -28,11 +28,16 @@ module apb_2_spi #(
     output logic                      scl,
     output logic                      cs);
     
+    logic [7:0] byte_2_send_fifo;
     logic [7:0] byte_2_send;
+    logic [7:0] byte_received;
     logic empty_tx;
     logic read_fifo_tx;
     logic end_trans;
     logic ena_spi;
+    logic end_rx;
+    logic write_fifo_rx;
+    logic new_byte;
 
     spi_interface #(
         .CLK_FREC(CLK_FREC),
@@ -43,8 +48,8 @@ module apb_2_spi #(
         
         // control signals
         .byte_2_send(byte_2_send),
-        .byte_received(),               // TODO
-        .new_byte(),                    // TODO
+        .byte_received(byte_received),
+        .new_byte(new_byte),
         .end_trans(end_trans),
         .msb_lsb(0),                    // 0: MSB first, 1: LSB first
         .ena_spi(ena_spi),
@@ -57,8 +62,9 @@ module apb_2_spi #(
     );
 
     always_comb read_fifo_tx = end_trans && !empty_tx;
-    always_comb ena_spi = !empty_tx;
-
+    always_comb ena_spi = !empty_tx || !end_rx;
+    always_comb write_fifo_rx = empty_tx && new_byte && !end_rx;
+    always_comb byte_2_send = empty_tx ? 0 : byte_2_send_fifo;
 
     apb_2_fifo #(
         .BASE_ADDR(BASE_ADDR),
@@ -84,14 +90,14 @@ module apb_2_spi #(
         .read_fifo_tx(read_fifo_tx),
         .empty_tx(empty_tx),            
         .almost_empty_tx(),             // not used
-        .fifo_r_data_tx(byte_2_send),
+        .fifo_r_data_tx(byte_2_send_fifo),
 
         // fifo out rx
-        .write_fifo_rx(),               // TODO
+        .write_fifo_rx(write_fifo_rx),
         .full_rx(),                     // not used
         .almost_full_rx(),              // not used
         .end_rx(end_rx),                     
-        .fifo_w_data_rx()               // TODO    
+        .fifo_w_data_rx(byte_received)
     );
 
 endmodule

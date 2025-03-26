@@ -13,6 +13,7 @@ module spi_checker#(
     parameter SCL_FREC = 1000000
 )(
     spi_if              spi, 
+    input  logic        send,
     input  logic        clk,
     input  logic        arstn
 );
@@ -67,6 +68,12 @@ module spi_checker#(
         $fell(spi.scl) |-> ##[SCL_TIME/2-1:SCL_TIME/2+1] $rose(spi.scl);
     endproperty
 
+    // 8. stable mosi if not send
+    property stable_mosi;
+        @(posedge clk) disable iff (!arstn)
+            (!send) |-> $stable(spi.mosi);
+    endproperty
+
     // -------------------------------------------------------------------
     // Instanciación de las aserciones (assert property) con mensajes de error.
     // Estas se evaluarán de forma continua.
@@ -96,9 +103,13 @@ module spi_checker#(
     assert property (cs_pulse_width)
       else $error("ERROR: CS pulse width is not within the expected range.");
 
-    // 8. Verifica que el tiempo entre flancos de subida y bajada de SCL sea SCL_TIME/2 ciclos.
+    // 7. Verifica que el tiempo entre flancos de subida y bajada de SCL sea SCL_TIME/2 ciclos.
     assert property (scl_half_period_falling_to_rising)
         else $error("ERROR: El tiempo entre el flanco de bajada y el de subida de SCL no es SCL_TIME/2 ciclos.");
+
+    // 8. Verifica que MOSI se mantenga estable si no se está enviando.
+    assert property (stable_mosi)
+        else $error("ERROR: MOSI is not stable if not sending.");
 
 endmodule
 
@@ -154,7 +165,12 @@ class agent_spi #(parameter int N_RECEPTIONS = 256);
 
 
     // Tarea para validar los bytes recibidos
-    task validate_received_bytes(logic [7:0] bytes_expected[N_RECEPTIONS-1:0]);
+    task validate_received_bytes(logic [7:0] bytes_expected[N_RECEPTIONS-1:0], int num_bytes_expected);
+        $display("Num bytes readed by the slave %d", n_bytes_readed);
+
+        assert (num_bytes_expected == n_bytes_readed)
+            else $error("Num bytes readed by the slave %d != %d than expected", n_bytes_readed, num_bytes_expected);
+
         for (int n_bytes = 0; n_bytes < n_bytes_readed; ++n_bytes) begin
             assert (bytes_expected[n_bytes] == bytes_readed[n_bytes])
                 else begin
