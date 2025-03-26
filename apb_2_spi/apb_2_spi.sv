@@ -63,7 +63,7 @@ module apb_2_spi #(
 
     always_comb read_fifo_tx = end_trans && !empty_tx;
     always_comb ena_spi = !empty_tx || !end_rx;
-    always_comb write_fifo_rx = empty_tx && new_byte && !end_rx;
+    always_comb write_fifo_rx = empty_tx && end_trans && !end_rx;
     always_comb byte_2_send = empty_tx ? 0 : byte_2_send_fifo;
 
     apb_2_fifo #(

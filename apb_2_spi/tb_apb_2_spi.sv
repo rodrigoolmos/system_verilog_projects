@@ -46,6 +46,7 @@ module tb_apb_2_spi;
 
     logic send = 0;
     logic receive = 0;
+    logic[1:0] num_test = 0;
     logic[31:0] apb_read_data;
 
     // spi if
@@ -80,7 +81,7 @@ module tb_apb_2_spi;
         #WAIT_AFTER_SPI_TIME;
         receive = 0;
         wait(spi_if_inst.cs);
-        #1000 @(posedge apb_if_inst.pclk);
+        #100000 @(posedge apb_if_inst.pclk);
     endtask
 
     task automatic send_data(int n_bytes_send);
@@ -94,7 +95,7 @@ module tb_apb_2_spi;
         wait_transfer(n_bytes_send);
         wait(spi_if_inst.cs);
         send = 0;
-        #1000 @(posedge apb_if_inst.pclk);
+        #100000 @(posedge apb_if_inst.pclk);
     endtask
 
     task automatic recive_data(int n_bytes_recive);
@@ -108,7 +109,7 @@ module tb_apb_2_spi;
         #WAIT_AFTER_SPI_TIME;
         receive = 0;
         wait(spi_if_inst.cs);
-        #1000 @(posedge apb_if_inst.pclk);
+        #100000 @(posedge apb_if_inst.pclk);
     endtask
 
     task wait_fifo_tx_empty();
@@ -196,7 +197,8 @@ module tb_apb_2_spi;
 
 
     initial begin
-        int num_bytes;
+        int num_bytes_send;
+        int num_bytes_receive;
         agent_spi_h = new(spi_if_inst, 0);
         agent_APB_m_h = new(apb_if_inst);
 
@@ -217,30 +219,43 @@ module tb_apb_2_spi;
             begin
 
                 // Test 1 only send data
-                // $display("Start test send data");
-                // for (int i=0; i<10; ++i) begin
-                //     num_bytes = $urandom_range(1,16);
-                //     send_data(num_bytes);
-                //     wait_fifo_tx_empty();
-                // end
-                // send_data(FIFO_DEPTH);                              // send FIFO_DEPTH bytes 
-                // agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);
+                num_test = 1;
+                $display("Start test send data");
+                for (int i=0; i<10; ++i) begin
+                    num_bytes_send = $urandom_range(1, FIFO_DEPTH);
+                    send_data(num_bytes_send);
+                    wait_fifo_tx_empty();
+                end
+                send_data(FIFO_DEPTH);                              // send FIFO_DEPTH bytes 
+                agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);
                 
                 // // Test 2 only receive data
-                // $display("Start test receive data");
-                // for (int i=0; i<10; ++i) begin
-                //     num_bytes = $urandom_range(1,16);
-                //     recive_data(num_bytes);
-                //     read_mosi_rx();
-                // end
-                // recive_data(FIFO_DEPTH);                            // receive FIFO_DEPTH bytes
-                // read_mosi_rx();
-                // validate_read_mosi_rx();
+                num_test = 2;
+                $display("Start test receive data");
+                for (int i=0; i<10; ++i) begin
+                    num_bytes_receive = $urandom_range(1, FIFO_DEPTH);
+                    recive_data(num_bytes_receive);
+                    read_mosi_rx();
+                end
+                recive_data(FIFO_DEPTH);                            // receive FIFO_DEPTH bytes
+                read_mosi_rx();
+                validate_read_mosi_rx();
 
                 // Test 3 send and receive data
+                num_test = 3;
                 $display("Start test send and receive data");
-                send_recive_data(3, 2);
+                for (int i=0; i<10; ++i) begin
+                    num_bytes_send = $urandom_range(1, FIFO_DEPTH);
+                    num_bytes_receive = $urandom_range(1, FIFO_DEPTH);
+                    send_recive_data(num_bytes_send, num_bytes_receive);
+                    read_mosi_rx();
+                end
+                send_recive_data(FIFO_DEPTH, FIFO_DEPTH);
+                read_mosi_rx();
+                validate_read_mosi_rx();
 
+
+                num_test = 0;
                 #10000 @(posedge apb_if_inst.pclk);
             end
 
