@@ -29,5 +29,3 @@ vsim -assertdebug -voptargs=+acc work.$top_simu
 run 1000ns
 
 restart
-
-# No uses el comando 'quit' para que la ventana gráfica no se cierre
