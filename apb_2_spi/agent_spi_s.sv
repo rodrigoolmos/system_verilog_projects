@@ -34,7 +34,7 @@ module spi_checker#(
     // durante SCL_TIME ciclos.
     property cs_0_scl_stable;
         @(posedge clk) disable iff (!arstn)
-            ($fell(spi.cs)) |=> $stable(spi.scl)[*SCL_TIME];
+            ($fell(spi.cs)) |=> $stable(spi.scl)[*(SCL_TIME-10)];
     endproperty
 
     // 3. Cuando CS está en 1, SCL debe estar en 1.
@@ -71,7 +71,7 @@ module spi_checker#(
     // 8. stable mosi if not send
     property stable_mosi;
         @(posedge clk) disable iff (!arstn)
-            (!send) |-> $stable(spi.mosi);
+            (send == 0) |-> (spi.mosi == 0);
     endproperty
 
     // -------------------------------------------------------------------
@@ -129,19 +129,21 @@ class agent_spi #(parameter int N_RECEPTIONS = 256);
         spi_vif.miso = 0;
     endfunction
 
-    task recive_data();
+    task automatic recive_data(ref logic enable);
         var logic [7:0] received_byte;
-        wait(spi_vif.cs == 0);
+        wait(spi_vif.cs == 0 && enable);
         for (int i=0; i<8; ++i) begin
             @(posedge spi_vif.scl);
             if (msb_lsb)
-                received_byte[7 - i] = spi_vif.mosi;
+            received_byte[7 - i] = spi_vif.mosi;
             else
                 received_byte[i] = spi_vif.mosi;
+            end
+        if (enable) begin
+            bytes_readed[n_bytes_readed] = received_byte;
+            n_bytes_readed++;
         end
 
-        bytes_readed[n_bytes_readed] = received_byte;
-        n_bytes_readed++;
     endtask
 
     task send_data(logic [7:0] byte_to_send);

@@ -9,11 +9,12 @@ module spi_interface #(
     input  logic        arstn,
 
     // control signals
-    input  logic[7:0]   byte_2_send,        // byte to send laches the byte when new_byte is 1
-    output logic[7:0]   byte_received,      // byte received ready when new_byte is 1
-    output logic        new_byte,           // new byte received or ready sent for sending put the new byte in byte_2_send when this signal is 1
+    input  logic[7:0]   byte_2_send,        // byte to send laches the byte when end_trans is 1
+    output logic[7:0]   byte_received,      // byte received ready when end_trans is 1
     input  logic        ena_spi,            // enable spi interface trsnasaction when this signal is 1 
-    output logic        end_trans,          // end of transaction lower ena_spi when end_trans 1 you dont want to send more bytes
+    // end of transaction lower ena_spi when end_trans 1 if you dont want to send more bytes
+    // when this signal is 1 the byte_received is ready to be read or the byte_2_send is ready to be written
+    output logic        end_trans,          
     input  logic        msb_lsb,            // msb = 1 or lsb = 0
 
     // spi signals
@@ -71,16 +72,13 @@ module spi_interface #(
             state_spi <= IDLE;
             byte_2_send_reg <= 0;
             byte_received <= 0;
-            new_byte <= 0;
         end else if(!ena_spi) begin
             state_spi <= IDLE;
             byte_2_send_reg <= 0;
             byte_received <= 0;
-            new_byte <= 0;
         end else begin
             case(state_spi)
                 IDLE: begin
-                    new_byte <= 0;
                     if(ena_spi)
                         state_spi <= WAIT_BEFORE;
                 end
@@ -91,7 +89,6 @@ module spi_interface #(
                 LOAD_BYTE: begin
                     byte_2_send_reg <= byte_2_send;
                     state_spi <= SEND_RECEIVE;
-                    new_byte <= 0;
                 end
                 SEND_RECEIVE: begin
                     if(cnt_miso == 8 && clk_div == MAX_CNT) begin
@@ -103,7 +100,6 @@ module spi_interface #(
                     if(clk_div == MAX_CNT) begin
                         if(ena_spi) begin
                             state_spi <= LOAD_BYTE;
-                            new_byte <= 1;
                         end else
                             state_spi <= IDLE;
                     end

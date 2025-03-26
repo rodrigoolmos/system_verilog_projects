@@ -37,7 +37,6 @@ module apb_2_spi #(
     logic ena_spi;
     logic end_rx;
     logic write_fifo_rx;
-    logic new_byte;
 
     spi_interface #(
         .CLK_FREC(CLK_FREC),
@@ -49,9 +48,8 @@ module apb_2_spi #(
         // control signals
         .byte_2_send(byte_2_send),
         .byte_received(byte_received),
-        .new_byte(new_byte),
         .end_trans(end_trans),
-        .msb_lsb(0),                    // 0: MSB first, 1: LSB first
+        .msb_lsb(1'b0),                    // 0: MSB first, 1: LSB first
         .ena_spi(ena_spi),
         
         // spi signals
@@ -61,10 +59,12 @@ module apb_2_spi #(
         .cs(cs)
     );
 
-    always_comb read_fifo_tx = end_trans && !empty_tx;
-    always_comb ena_spi = !empty_tx || !end_rx;
-    always_comb write_fifo_rx = empty_tx && end_trans && !end_rx;
-    always_comb byte_2_send = empty_tx ? 0 : byte_2_send_fifo;
+    always_comb begin
+        read_fifo_tx = end_trans && !empty_tx;
+        ena_spi = !empty_tx || !end_rx;
+        write_fifo_rx = empty_tx && end_trans && !end_rx;
+        byte_2_send = empty_tx ? 0 : byte_2_send_fifo;            
+    end
 
     apb_2_fifo #(
         .BASE_ADDR(BASE_ADDR),

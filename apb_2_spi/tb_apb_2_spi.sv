@@ -1,6 +1,12 @@
 `include "agent_spi_s.sv"
 `include "agent_APB_m.sv"
 
+/*
+    TODO testear empty, almost empty, full, almost full por apb
+    TODO habilitar MSB y LSB configurables y testearlos
+    TODO hacer transacciones aleatorias enviar recibir enviar/recibir en lugar de en bloques
+*/
+
 module tb_apb_2_spi;
 
     timeunit 1ns;
@@ -143,7 +149,7 @@ module tb_apb_2_spi;
         end
     endtask 
 
-    task automatic validate_read_mosi_rx();
+    task automatic validate_read_miso_rx();
         $display("Num bytes readed by the master %d", index_data_spi_receive);
 
         for (int i=0; i<index_data_spi_receive; ++i) begin
@@ -195,6 +201,17 @@ module tb_apb_2_spi;
         .cs(spi_if_inst.cs)
     );
 
+    spi_checker#(
+        .CLK_FREC(CLK_FREC),
+        .SCL_FREC(SCL_FREC)
+    )spi_checker_ins(
+        .spi(spi_if_inst),
+        .send(send),
+        .clk(apb_if_inst.pclk),
+        .arstn(apb_if_inst.presetn)
+    );
+
+    apb_checker apb_checker_ins (.apb(apb_if_inst));
 
     initial begin
         int num_bytes_send;
@@ -212,7 +229,7 @@ module tb_apb_2_spi;
             // Proceso del agente: se queda recibiendo datos indefinidamente.
             begin
                 forever begin
-                    agent_spi_h.recive_data();
+                    agent_spi_h.recive_data(send);
                 end
             end
 
@@ -227,7 +244,7 @@ module tb_apb_2_spi;
                     wait_fifo_tx_empty();
                 end
                 send_data(FIFO_DEPTH);                              // send FIFO_DEPTH bytes 
-                agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);
+                agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);  // validate data received by the slave MOSI send data
                 
                 // // Test 2 only receive data
                 num_test = 2;
@@ -239,7 +256,7 @@ module tb_apb_2_spi;
                 end
                 recive_data(FIFO_DEPTH);                            // receive FIFO_DEPTH bytes
                 read_mosi_rx();
-                validate_read_mosi_rx();
+                validate_read_miso_rx();                            // validate data received by the master MISO send data
 
                 // Test 3 send and receive data
                 num_test = 3;
@@ -250,10 +267,10 @@ module tb_apb_2_spi;
                     send_recive_data(num_bytes_send, num_bytes_receive);
                     read_mosi_rx();
                 end
-                send_recive_data(FIFO_DEPTH, FIFO_DEPTH);
+                send_recive_data(FIFO_DEPTH, FIFO_DEPTH);           // send and receive FIFO_DEPTH bytes
                 read_mosi_rx();
-                validate_read_mosi_rx();
-
+                validate_read_miso_rx();                                                        // validate data received by the master MISO send data
+                agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);   // validate data received by the slave MOSI send data
 
                 num_test = 0;
                 #10000 @(posedge apb_if_inst.pclk);
