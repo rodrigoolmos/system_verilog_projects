@@ -174,7 +174,7 @@ module tb_spi_interface;
         generate_data(0, 1);
         msb_lsb = 0;
         // Inicialización de la clase SPI
-        agent_spi_h = new(spi_if_inst, msb_lsb);
+        agent_spi_h = new(spi_if_inst);
 
         // Inicialización de señales
         byte_2_send = 8'hFF;
