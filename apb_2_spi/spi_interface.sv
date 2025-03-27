@@ -23,9 +23,9 @@ module spi_interface #(
     output logic        scl,
     output logic        cs);
 
-    generate if (SCL_FREC *10 > CLK_FREC) begin : err_gen
+    generate if (CLK_FREC / SCL_FREC < 10) begin : err_gen
           initial
-            $fatal("ERROR: SCL_FREC * 10 > CLK_FREC");
+            $fatal("ERROR: CLK_FREC / SCL_FREC < 10");
         end
     endgenerate
 
