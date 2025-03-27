@@ -18,6 +18,12 @@ module tb_i2c;
   tri sda;
   logic scl;
 
+  // datos recividos
+  logic [7:0] data_received_slave;
+  logic [7:0] data_sended_slave;
+  logic [7:0] addres_received_slave;
+
+
   // Instanciación del DUT
   i2c #(
       .CLK_FREQ(CLK_FREQ),
@@ -52,10 +58,10 @@ module tb_i2c;
   initial begin
     // Inicialización de señales
     ena_i2c    = 0;
-    force sda  = 0;
-    msb_lsb    = 1;         // Suponiendo que '1' es MSB primero
-    adrr_r_w   = 8'hA0;      // Ejemplo de dirección (7-bit + bit R/W)
-    byte_2_send = 8'h55;     // Ejemplo de byte a enviar
+    msb_lsb    = 1;             // Suponiendo que '1' es MSB primero
+    adrr_r_w   = 8'hA0;         // Ejemplo de dirección (7-bit + bit R/W)
+    byte_2_send = 8'h55;        // Ejemplo de byte a enviar
+    data_sended_slave = 8'hFE;  // Ejemplo de byte a enviar
     
     // Esperar al final del reset
     @(posedge arstn);
@@ -70,16 +76,91 @@ module tb_i2c;
     // Se puede agregar más estímulo para verificar distintas condiciones
     #1000;
     ena_i2c = 0;
+    #100000;
     
+
+    adrr_r_w   = 8'hA1;      // Ejemplo de dirección (7-bit + bit R/W)
+    byte_2_send = 8'h00;     // Ejemplo de byte a enviar
+    
+    // Iniciar la transacción I2C
+    ena_i2c = 1;
+
+    // Esperar a que la transacción termine
+    repeat(2) @(posedge end_trans);  
+    
+    // Se puede agregar más estímulo para verificar distintas condiciones
+    #1000;
+    ena_i2c = 0;
+    #10000;
+
     // Finalizar simulación tras un tiempo adicional
-    #20000;
+    #40000;
     $finish;
   end
 
   // Monitor opcional para observar señales en la simulación
   initial begin
-    $monitor("Time = %0t | sda = %b | scl = %b | end_trans = %b | byte_received = %h", 
-             $time, sda, scl, end_trans, byte_received);
+    forever begin
+      release sda;
+      // START CONDITION
+      @(negedge sda iff scl); 
+  
+      // ADDRES TRANSMISION
+      for (int i=0; i<8; ++i) begin
+        @(posedge scl);
+        if (msb_lsb) begin
+          addres_received_slave[7-i] = sda;
+        end else begin
+          addres_received_slave[i] = sda;
+        end
+      end
+  
+      // ACK
+      @(negedge scl);
+      #1000;
+      force sda  = 1'b0;
+      @(negedge scl);
+      release sda;
+  
+      // DATA TRANSMISION
+      if (!addres_received_slave[0]) begin     // Si es una escritura
+        for (int i=0; i<8; ++i) begin
+          @(posedge scl);
+          if (msb_lsb) begin
+            data_received_slave[7-i] = sda;
+          end else begin
+            data_received_slave[i] = sda;
+          end
+        end
+      end else begin                        // Si es una lectura
+        for (int i=0; i<8; ++i) begin
+          if (msb_lsb) begin
+            if(data_sended_slave[7-i])
+              force sda = 1;
+            else
+              force sda = 0;
+          end else begin
+            if(data_sended_slave[i])
+              force sda = 1;
+            else
+              force sda = 0;
+          end
+          @(negedge scl);
+        end
+        @(negedge scl);
+      end
+      release sda;
+  
+      // ACK
+      @(negedge scl);
+      #1000;
+      force sda  = 1'b0;
+      @(negedge scl);
+      release sda;
+
+      // STop CONDITION
+      @(negedge sda iff scl); 
+    end
   end
 
 endmodule

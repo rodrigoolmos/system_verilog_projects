@@ -31,6 +31,7 @@ module i2c #(
     logic reset_clk_div;
     logic send_receive;             // 0 = send 1 = receive
     logic[2:0] bit_cnt;
+    logic transaction_ok;
 
     localparam MAX_CNT = (CLK_FREQ/I2C_FREQ) - 1;
     localparam HALF_CNT = MAX_CNT/2;
@@ -63,6 +64,7 @@ module i2c #(
             bit_cnt <= 7;
             send_receive <= 0;
             reset_clk_div <= 1;
+            transaction_ok <= 0;
         end else begin
             case (state_i2c)
                 idle: begin
@@ -75,16 +77,17 @@ module i2c #(
                     end
                 end
                 start: begin
-                    if (clk_div == 0) begin
+                    if (clk_div == HALF_CNT) begin
                         state_i2c <= addr;
                     end
                 end
                 addr: begin
                     if (clk_div == HALF_CNT) begin
                         bit_cnt <= bit_cnt - 1;
-                    end else if (bit_cnt == 1 && clk_div == 0) begin
+                        if (bit_cnt == 1) begin
                             bit_cnt <= 0;
                             state_i2c <= r_w;
+                        end
                     end
                 end
                 r_w: begin
@@ -94,8 +97,11 @@ module i2c #(
                     end
                 end
                 ack: begin
-                    if (clk_div == HALF_CNT) begin
-                        if (sda == 0) begin
+                    if (clk_div == 0) begin
+                        transaction_ok <= ~sda_i;
+                    end else if (clk_div == HALF_CNT) begin
+                        if (transaction_ok) begin
+                            transaction_ok <= 0;
                             if (ena_i2c) begin
                                 bit_cnt <= BITS_WAIT - 1;
                                 state_i2c <= wait_time;
@@ -108,7 +114,7 @@ module i2c #(
                     end
                 end
                 wait_time: begin
-                    if (clk_div == 0) begin
+                    if (clk_div == HALF_CNT) begin
                         bit_cnt <= bit_cnt - 1;
                         if (bit_cnt == 0) begin
                             bit_cnt <= 7;
@@ -119,9 +125,10 @@ module i2c #(
                 send_receive_data: begin
                     if (clk_div == HALF_CNT) begin
                         bit_cnt <= bit_cnt - 1;
-                    end else if (bit_cnt == 7 && clk_div == 0) begin
+                        if (bit_cnt == 0) begin
                             bit_cnt <= 7;
                             state_i2c <= ack;
+                        end
                     end
                 end
                 stop: begin
@@ -156,14 +163,18 @@ module i2c #(
         // ACK
         end else if (state_i2c == ack) begin
             sda_o = 1;
-            scl = (clk_div < HALF_CNT);
+            scl = (clk_div < HALF_CNT + 1);
         // WAIT TIME
         end else if (state_i2c == wait_time) begin
-            sda_o = 1;
-            scl = (clk_div < HALF_CNT);
+            sda_o = 0;
+            scl = 0;
         // SEND DATA
         end else if (state_i2c == send_receive_data) begin
-            sda_o = byte_2_send[bit_cnt];
+            if (msb_lsb) begin
+                sda_o = byte_2_send[bit_cnt];
+            end else begin
+                sda_o = byte_2_send[7-bit_cnt];
+            end
             scl = (clk_div < HALF_CNT);
         // STOP CONDITION
         end else if (state_i2c == stop) begin
@@ -180,7 +191,7 @@ module i2c #(
             byte_received <= 0;
         end else begin
             if (clk_div == 0) begin
-                if (state_i2c == send_receive_data && send_receive == 0) begin
+                if (state_i2c == send_receive_data && send_receive == 1) begin
                     if (msb_lsb) begin
                         byte_received <= {byte_received[6:0], sda_i};
                     end else begin
@@ -192,7 +203,7 @@ module i2c #(
     end
 
     always_comb begin
-        if (state_i2c == ack)
+        if (state_i2c == ack || state_i2c == wait_time)
             sda_s = 1;
         else if (state_i2c == send_receive_data)
             sda_s = send_receive;
@@ -200,11 +211,16 @@ module i2c #(
             sda_s = 0;
     end
     
-
-    assign sda = sda_s ? sda_o : 1'bz;
-    always_comb sda_i = sda;
-
+    always_ff @(posedge clk or negedge arstn) begin
+        if (!arstn) begin
+            sda_i = 0;
+        end else begin
+            sda_i = sda;
+        end
+    end
 
     always_comb end_trans = (state_i2c == ack);
+
+    assign sda = sda_s ? 1'bz : sda_o;          // tri-state buffer
 
 endmodule
