@@ -2,6 +2,7 @@
 // CPOL = 1
 
 module apb_2_spi #(
+    parameter MSB_LSB = 0,
     parameter BASE_ADDR = 8,
     parameter FIFO_DEPTH = 256,    // power of 2
     parameter CLK_FREC = 100000000,
@@ -49,7 +50,7 @@ module apb_2_spi #(
         .byte_2_send(byte_2_send),
         .byte_received(byte_received),
         .end_trans(end_trans),
-        .msb_lsb(1'b0),                    // 0: MSB first, 1: LSB first
+        .msb_lsb(MSB_LSB[0]),                    // 0: MSB first, 1: LSB first
         .ena_spi(ena_spi),
         
         // spi signals

@@ -124,7 +124,7 @@ class agent_spi #(parameter int N_RECEPTIONS = 256);
     int n_bytes_readed = 0;
 
     // Constructor que recibe el virtual interface y el baudrate
-    function new(virtual spi_if spi_vif, logic msb_lsb);
+    function new(virtual spi_if spi_vif);
         this.spi_vif = spi_vif;
         spi_vif.miso = 0;
     endfunction
@@ -135,7 +135,7 @@ class agent_spi #(parameter int N_RECEPTIONS = 256);
         for (int i=0; i<8; ++i) begin
             @(posedge spi_vif.scl);
             if (msb_lsb)
-            received_byte[7 - i] = spi_vif.mosi;
+                received_byte[7 - i] = spi_vif.mosi;
             else
                 received_byte[i] = spi_vif.mosi;
             end

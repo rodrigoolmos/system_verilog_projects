@@ -1,12 +1,6 @@
 `include "agent_spi_s.sv"
 `include "agent_APB_m.sv"
 
-/*
-    TODO testear empty, almost empty, full, almost full por apb
-    TODO habilitar MSB y LSB configurables y testearlos
-    TODO hacer transacciones aleatorias enviar recibir enviar/recibir en lugar de en bloques
-*/
-
 module tb_apb_2_spi;
 
     timeunit 1ns;
@@ -35,8 +29,11 @@ module tb_apb_2_spi;
     localparam logic[3:0] ALMOST_FULL = 4'b0100;
     localparam logic[3:0] EMPTY = 4'b0010;
     localparam logic[3:0] ALMOST_EMPTY = 4'b0001;
+    localparam logic[3:0] NONE = 4'b0000;
 
-    localparam integer NUM_TRANS = 1024;
+    localparam integer MSB_LSB = 1;
+
+    localparam integer NUM_TRANS = 2048;
 
     // Instanciamos la clase APB (maestro)
     agent_APB_m agent_APB_m_h;
@@ -77,6 +74,15 @@ module tb_apb_2_spi;
             agent_APB_m_h.write_APB_data(data_spi_mosi_send[index_data_spi_send], ADDR_WRITE_TX);
             index_data_spi_send++;
         end
+        if (n_bytes_send == FIFO_DEPTH) begin
+            test_full_fifo_tx();
+        end else if (n_bytes_send == FIFO_DEPTH -1) begin
+            test_almost_full_fifo_tx();
+        end else if (n_bytes_send == 1) begin
+            test_almost_empty_fifo_tx();
+        end else begin
+            test_none_tx();   
+        end
         wait_transfer(n_bytes_send);
         send = 0;
         receive = 1;
@@ -88,6 +94,15 @@ module tb_apb_2_spi;
         receive = 0;
         wait(spi_if_inst.cs);
         #100000 @(posedge apb_if_inst.pclk);
+        if (n_bytes_recive == FIFO_DEPTH) begin
+            test_full_fifo_rx();
+        end else if (n_bytes_recive == FIFO_DEPTH -1) begin
+            test_almost_full_fifo_rx();
+        end else if (n_bytes_recive == 1) begin
+            test_almost_empty_fifo_rx();
+        end else begin
+            test_none_rx();   
+        end
     endtask
 
     task automatic send_data(int n_bytes_send);
@@ -97,6 +112,15 @@ module tb_apb_2_spi;
         for(i = 0; i < n_bytes_send; i++) begin
             agent_APB_m_h.write_APB_data(data_spi_mosi_send[index_data_spi_send], ADDR_WRITE_TX);
             index_data_spi_send++;
+        end
+        if (n_bytes_send == FIFO_DEPTH) begin
+            test_full_fifo_tx();
+        end else if (n_bytes_send == FIFO_DEPTH -1) begin
+            test_almost_full_fifo_tx();
+        end else if (n_bytes_send == 1) begin
+            test_almost_empty_fifo_tx();
+        end else begin
+            test_none_tx();   
         end
         wait_transfer(n_bytes_send);
         wait(spi_if_inst.cs);
@@ -116,6 +140,15 @@ module tb_apb_2_spi;
         receive = 0;
         wait(spi_if_inst.cs);
         #100000 @(posedge apb_if_inst.pclk);
+        if (n_bytes_recive == FIFO_DEPTH) begin
+            test_full_fifo_rx();
+        end else if (n_bytes_recive == FIFO_DEPTH -1) begin
+            test_almost_full_fifo_rx();
+        end else if (n_bytes_recive == 1) begin
+            test_almost_empty_fifo_rx();
+        end else begin
+            test_none_rx();            
+        end
     endtask
 
     task wait_fifo_tx_empty();
@@ -124,6 +157,11 @@ module tb_apb_2_spi;
             @(posedge apb_if_inst.pclk);
             agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
         end
+    endtask
+
+    task generate_error_pslverr();
+        agent_APB_m_h.write_APB_data(8'h12, 32'hDEADBEEF);
+        agent_APB_m_h.read_APB_data(apb_read_data, 32'hBEEFDEAD);
     endtask
 
     task automatic generate_data(integer seed, logic mode,ref logic [7:0] data[NUM_TRANS-1:0]);
@@ -162,6 +200,66 @@ module tb_apb_2_spi;
 
     endtask 
 
+    task automatic test_empty_fifo_rx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+        assert (apb_read_data == EMPTY) 
+                else $error("APB read RX status flag is not empty");
+    endtask
+
+    task automatic test_empty_fifo_tx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        assert (apb_read_data == EMPTY) 
+                else $error("APB read TX status flag is not empty");
+    endtask
+
+    task automatic test_almost_empty_fifo_rx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+        assert (apb_read_data == ALMOST_EMPTY) 
+                else $error("APB read RX status flag is not almost empty");
+    endtask
+
+    task automatic test_almost_empty_fifo_tx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        assert (apb_read_data == ALMOST_EMPTY) 
+                else $error("APB read TX status flag is not almost empty");
+    endtask
+
+    task automatic test_full_fifo_rx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+        assert (apb_read_data == FULL) 
+                else $error("APB read RX status flag is not full");
+    endtask
+
+    task automatic test_full_fifo_tx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        assert (apb_read_data == FULL) 
+                else $error("APB read TX status flag is not full");
+    endtask
+
+    task automatic test_almost_full_fifo_rx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+        assert (apb_read_data == ALMOST_FULL) 
+                else $error("APB read RX status flag is not almost full");
+    endtask
+
+    task automatic test_almost_full_fifo_tx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        assert (apb_read_data == ALMOST_FULL) 
+                else $error("APB read TX status flag is not almost full");
+    endtask
+
+    task automatic test_none_tx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
+        assert (apb_read_data == NONE) 
+                else $error("APB read TX status flag NONE ERROR");
+    endtask
+
+    task automatic test_none_rx();
+        agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
+        assert (apb_read_data == NONE) 
+                else $error("APB read RX status flag NONE ERROR");
+    endtask
+
     // Generación del reloj para la interfaz APB
     initial begin
         apb_if_inst.pclk = 0;
@@ -178,6 +276,7 @@ module tb_apb_2_spi;
 
     // Instanciamos el modulo APB a SPI
     apb_2_spi #(
+        .MSB_LSB(MSB_LSB), // 0: MSB first, 1: LSB first
         .BASE_ADDR(BASE_ADDR),
         .FIFO_DEPTH(FIFO_DEPTH),
         .CLK_FREC(CLK_FREC),
@@ -211,13 +310,18 @@ module tb_apb_2_spi;
         .arstn(apb_if_inst.presetn)
     );
 
-    apb_checker apb_checker_ins (.apb(apb_if_inst));
+    apb_checker 
+            #(.ADDR_MIN(0), 
+              .ADDR_MAX(12)
+            ) apb_checker_ins (.apb(apb_if_inst));
 
     initial begin
         int num_bytes_send;
+        int lotery;
         int num_bytes_receive;
-        agent_spi_h = new(spi_if_inst, 0);
+        agent_spi_h = new(spi_if_inst);
         agent_APB_m_h = new(apb_if_inst);
+        agent_spi_h.set_msb_lsb(MSB_LSB);
 
         generate_data(0, 1, data_spi_mosi_send);
         generate_data(0, 1, data_spi_miso_receive);
@@ -235,33 +339,41 @@ module tb_apb_2_spi;
 
             begin
 
+                test_empty_fifo_rx();
+                test_empty_fifo_tx();
+
                 // Test 1 only send data
                 num_test = 1;
                 $display("Start test send data");
-                for (int i=0; i<10; ++i) begin
+                for (int i=0; i<30; ++i) begin
                     num_bytes_send = $urandom_range(1, FIFO_DEPTH);
                     send_data(num_bytes_send);
                     wait_fifo_tx_empty();
                 end
                 send_data(FIFO_DEPTH);                              // send FIFO_DEPTH bytes 
+                wait_fifo_tx_empty();
+                send_data(FIFO_DEPTH-1);                            // send FIFO_DEPTH - 1 bytes 
+                wait_fifo_tx_empty();
                 agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);  // validate data received by the slave MOSI send data
                 
                 // // Test 2 only receive data
                 num_test = 2;
                 $display("Start test receive data");
-                for (int i=0; i<10; ++i) begin
+                for (int i=0; i<30; ++i) begin
                     num_bytes_receive = $urandom_range(1, FIFO_DEPTH);
                     recive_data(num_bytes_receive);
                     read_mosi_rx();
                 end
                 recive_data(FIFO_DEPTH);                            // receive FIFO_DEPTH bytes
                 read_mosi_rx();
+                recive_data(FIFO_DEPTH-1);                          // receive FIFO_DEPTH -1 bytes
+                read_mosi_rx();
                 validate_read_miso_rx();                            // validate data received by the master MISO send data
 
                 // Test 3 send and receive data
                 num_test = 3;
                 $display("Start test send and receive data");
-                for (int i=0; i<10; ++i) begin
+                for (int i=0; i<30; ++i) begin
                     num_bytes_send = $urandom_range(1, FIFO_DEPTH);
                     num_bytes_receive = $urandom_range(1, FIFO_DEPTH);
                     send_recive_data(num_bytes_send, num_bytes_receive);
@@ -269,10 +381,40 @@ module tb_apb_2_spi;
                 end
                 send_recive_data(FIFO_DEPTH, FIFO_DEPTH);           // send and receive FIFO_DEPTH bytes
                 read_mosi_rx();
+                send_recive_data(FIFO_DEPTH-1, FIFO_DEPTH-1);           // send and receive FIFO_DEPTH bytes
+                read_mosi_rx();
                 validate_read_miso_rx();                                                        // validate data received by the master MISO send data
                 agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);   // validate data received by the slave MOSI send data
 
+                // Test 4 random send and receive data
+                num_test = 4;
+                $display("Start test random send and receive data lotery");
+                for (int i=0; i<30; ++i) begin
+                    lotery = $urandom_range(1, 4);
+                    if (lotery == 1) begin
+                        num_bytes_send = $urandom_range(1, FIFO_DEPTH);
+                        send_data(num_bytes_send);
+                        wait_fifo_tx_empty();
+                    end else if (lotery == 2) begin
+                        num_bytes_receive = $urandom_range(1, FIFO_DEPTH);
+                        recive_data(num_bytes_receive);
+                        read_mosi_rx();
+                    end else if (lotery == 3) begin
+                        num_bytes_send = $urandom_range(1, FIFO_DEPTH);
+                        num_bytes_receive = $urandom_range(1, FIFO_DEPTH);
+                        send_recive_data(num_bytes_send, num_bytes_receive);
+                        read_mosi_rx();
+                    end else begin
+                        generate_error_pslverr();
+                    end
+                end
+                validate_read_miso_rx();                                                        // validate data received by the master MISO send data
+                agent_spi_h.validate_received_bytes(data_spi_mosi_send, index_data_spi_send);   // validate data received by the slave MOSI send data
+
+
                 num_test = 0;
+                generate_error_pslverr();
+
                 #10000 @(posedge apb_if_inst.pclk);
             end
 
