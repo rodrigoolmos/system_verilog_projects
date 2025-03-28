@@ -35,7 +35,8 @@ module i2c #(
 
     localparam MAX_CNT = (CLK_FREQ/I2C_FREQ) - 1;
     localparam HALF_CNT = MAX_CNT/2;
-    localparam QUAR_CNT = MAX_CNT/4;
+    localparam START_CNT = MAX_CNT/20;
+
 
     logic        sda_o;     // output
     logic        sda_i;     // input
@@ -150,7 +151,7 @@ module i2c #(
             sda_o = 1;
         // START CONDITION
         end else if (state_i2c == start) begin
-            sda_o = (clk_div < QUAR_CNT);
+            sda_o = (clk_div < START_CNT);
             scl = (clk_div < HALF_CNT);
         // ADDRES TRANSMISION
         end else if (state_i2c == addr) begin
@@ -178,7 +179,7 @@ module i2c #(
             scl = (clk_div < HALF_CNT);
         // STOP CONDITION
         end else if (state_i2c == stop) begin
-            sda_o = (clk_div > QUAR_CNT);
+            sda_o = (clk_div < HALF_CNT + 1);
             scl = 1;
         end else begin
             scl = 1;
@@ -212,12 +213,12 @@ module i2c #(
     end
     
     always_ff @(posedge clk or negedge arstn) begin
-        if (!arstn) begin
-            sda_i = 0;
-        end else begin
-            sda_i = sda;
-        end
+        if (!arstn)
+            sda_i <= 0;
+        else
+            sda_i <= sda;
     end
+    
 
     always_comb end_trans = (state_i2c == ack);
 
