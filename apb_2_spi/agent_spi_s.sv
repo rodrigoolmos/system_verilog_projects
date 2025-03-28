@@ -34,7 +34,7 @@ module spi_checker#(
     // durante SCL_TIME ciclos.
     property cs_0_scl_stable;
         @(posedge clk) disable iff (!arstn)
-            ($fell(spi.cs)) |=> $stable(spi.scl)[*(SCL_TIME-10)];
+            ($fell(spi.cs)) |-> $stable(spi.scl)[*(SCL_TIME-SCL_TIME/10)];
     endproperty
 
     // 3. Cuando CS está en 1, SCL debe estar en 1.
