@@ -78,7 +78,7 @@ module tb_spi_interface;
     task send_byte_mosi(logic[7:0] byte_send);
         byte_2_send = byte_send;
         ena_spi = 1;
-        agent_spi_h.recive_data();
+        agent_spi_h.recive_data(ena_spi);
         @(posedge end_trans);
         ena_spi = 0;
     endtask
@@ -88,7 +88,7 @@ module tb_spi_interface;
         ena_spi = 1;
         for (int i=start_index; i<end_index; ++i) begin
             byte_2_send = data_sended[i];
-            agent_spi_h.recive_data();
+            agent_spi_h.recive_data(ena_spi);
             if (i== end_index - 1)
                 @(posedge end_trans);
             else
@@ -150,7 +150,7 @@ module tb_spi_interface;
             repeat(200) @(posedge clk);
         end
         
-        agent_spi_h.validate_received_bytes(data_sended);
+        agent_spi_h.validate_received_bytes(data_sended, 256);
 
         recive_byte_miso(8'h1);
         repeat(200) @(posedge clk);

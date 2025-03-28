@@ -37,6 +37,8 @@ module spi_interface #(
     logic negedge_scl;
     logic ena_clk_div;
 
+    logic miso_ff;
+
     logic[3:0] cnt_mosi;
     logic[3:0] cnt_miso;
 
@@ -110,6 +112,13 @@ module spi_interface #(
 
     always_comb end_trans = (state_spi == WAIT_AFTER);
 
+    always_ff @(posedge clk or negedge arstn) begin
+        if (!arstn)
+            miso_ff <= 0;
+        else
+            miso_ff <= miso;
+    end
+
     // MISO
     always_ff @(posedge clk or negedge arstn) begin
         if(!arstn) begin
@@ -120,9 +129,9 @@ module spi_interface #(
                 cnt_miso <= cnt_miso + 1;
                 if (cnt_miso < 8) begin
                     if (msb_lsb)
-                        byte_received_reg[7 - cnt_miso] <= miso;
+                        byte_received_reg[7 - cnt_miso] <= miso_ff;
                     else
-                        byte_received_reg[cnt_miso] <= miso;
+                        byte_received_reg[cnt_miso] <= miso_ff;
                 end
             end
         end else begin
