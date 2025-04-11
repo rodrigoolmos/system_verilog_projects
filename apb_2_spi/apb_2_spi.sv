@@ -50,7 +50,7 @@ module apb_2_spi #(
         .byte_2_send(byte_2_send),
         .byte_received(byte_received),
         .end_trans(end_trans),
-        .msb_lsb(MSB_LSB[0]),                    // 0: MSB first, 1: LSB first
+        .msb_lsb(MSB_LSB[0]),                    // 1: MSB first, 0: LSB first
         .ena_spi(ena_spi),
         
         // spi signals

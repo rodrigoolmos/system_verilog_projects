@@ -276,7 +276,7 @@ module tb_apb_2_spi;
 
     // Instanciamos el modulo APB a SPI
     apb_2_spi #(
-        .MSB_LSB(MSB_LSB), // 0: MSB first, 1: LSB first
+        .MSB_LSB(MSB_LSB), // 1: MSB first, 0: LSB first
         .BASE_ADDR(BASE_ADDR),
         .FIFO_DEPTH(FIFO_DEPTH),
         .CLK_FREC(CLK_FREC),
