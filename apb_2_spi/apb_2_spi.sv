@@ -2,7 +2,7 @@
 // CPOL = 1
 
 module apb_2_spi #(
-    parameter MSB_LSB = 0,
+    parameter MSB_LSB = 1,         // 1: MSB first, 0: LSB first
     parameter BASE_ADDR = 8,
     parameter FIFO_DEPTH = 256,    // power of 2
     parameter CLK_FREC = 100000000,
