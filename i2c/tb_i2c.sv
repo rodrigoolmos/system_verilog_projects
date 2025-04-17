@@ -1,12 +1,15 @@
 `timescale 1ns/1ps
+`include "agent_i2c.sv"
+
 module tb_i2c;
 
-  // Parámetros para el testbench
-  localparam CLK_FREQ  = 100_000_000;  // 100 MHz
-  localparam I2C_FREQ  = 100_000;      // 100 KHz
-  localparam CLK_PERIOD = 10;          // Período de reloj en ns (para 100 MHz)
+  // Parámetros del testbench
+  localparam CLK_FREQ    = 100_000_000;  // 100 MHz
+  localparam I2C_FREQ    = 100_000;      // 100 KHz
+  localparam CLK_PERIOD  = 10;           // Período reloj 100 MHz
+  localparam N_RECEPTIONS= 256;          // Número de recepciones
 
-  // Señales de prueba
+  // Señales internas del testbench
   logic clk;
   logic arstn;
   logic [7:0] byte_2_send;
@@ -15,21 +18,23 @@ module tb_i2c;
   logic end_trans;
   logic msb_lsb;
   logic [7:0] adrr_r_w;
-  tri sda;
-  logic scl;
 
-  // datos recividos
-  logic [7:0] data_received_slave;
-  logic [7:0] data_sended_slave;
-  logic [7:0] addres_received_slave;
+  logic[7:0] data_sended[N_RECEPTIONS-1:0];
+  logic[7:0] data_received[N_RECEPTIONS-1:0];
+  integer n_bytes_received = 0;
+  integer n_bytes_sended = 0;
 
-  logic [7:0] data_received_master;
+  // Interfaz I²C
+  i2c_if i2c_vif();
 
+  // Pull-up virtual sobre la señal SDA
+  pullup(i2c_vif.sda);
 
-  typedef enum logic[2:0] {idle, addr_r_w, ack, send_byte_st, receive_byte_st} state_i2c_t;
-  state_i2c_t state_i2c_slave;
+  // Clase Agent I²C (slave virtual)
+  agent_i2c #(N_RECEPTIONS,
+              6'h34) agent_i2c_h;
 
-  // Instanciación del DUT
+  // DUT (Master)
   i2c #(
       .CLK_FREQ(CLK_FREQ),
       .I2C_FREQ(I2C_FREQ)
@@ -42,154 +47,137 @@ module tb_i2c;
       .end_trans(end_trans),
       .msb_lsb(msb_lsb),
       .adrr_r_w(adrr_r_w),
-      .sda(sda),
-      .scl(scl)
+      .sda(i2c_vif.sda),
+      .scl(i2c_vif.scl)
   );
 
-  task automatic read_byte_slave(ref logic [7:0] data);
-    for (int i=0; i<8; ++i) begin
-      @(posedge scl);
-      if (msb_lsb) begin
-        data[7-i] = sda;
-      end else begin
-        data[i] = sda;
-      end
-    end
-    @(negedge scl);
-  endtask
+  i2c_checker checker_ins(
+    .i2c_vif(i2c_vif),
+    .clk(clk),
+    .arstn(arstn)
+  );
 
-
-  task automatic send_byte_slave(ref logic [7:0] data);
-    #4000;
-    wait(scl == 0);
-    for (int i=0; i<8; ++i) begin
-      if (msb_lsb) begin
-        if(data[7-i])
-          force sda = 1;
-        else
-          force sda = 0;
-      end else begin
-        if(data[i])
-          force sda = 1;
-        else
-          force sda = 0;
-      end
-      @(negedge scl);
+    // Tarea para validar los bytes recibidos
+  task validate_received_bytes();
+    for (int n_bytes = 0; n_bytes < N_RECEPTIONS; ++n_bytes) begin
+        assert (data_sended[n_bytes] == data_received[n_bytes])
+            else begin
+                $error("Error los datos enviados y leidos no cuadran %d, %d", 
+                              data_sended[n_bytes], data_received[n_bytes]);
+                $stop;
+            end
     end
   endtask
 
-  task gen_ack();
-    #2000;
-    force sda  = 1'b0;
-    @(posedge scl);
-    #4000;
-    release sda;
-  endtask
-
-  task automatic read_byte_master(ref logic [7:0] data, logic [6:0] addr);
+  // Tareas para control del Master
+  task automatic read_bytes_master(int n_bytes,ref logic [7:0] data[N_RECEPTIONS-1:0], logic [6:0] addr);
     ena_i2c = 1;
-    adrr_r_w   = {addr, 1'b1};
+    adrr_r_w = {addr, 1'b1};
     byte_2_send = 8'h00;
-    repeat(2) @(posedge end_trans);
+    repeat(1) @(posedge end_trans);
+    for (int i=0; i<n_bytes; ++i) begin
+      repeat(1) @(posedge end_trans);
+      data[n_bytes_received] = byte_received;
+      n_bytes_received++;
+    end
     #1000 @(posedge clk);
     ena_i2c = 0;
-    data = byte_received;
     @(negedge end_trans);
-    #1000@(posedge clk);
+    #1000 @(posedge clk);
   endtask
 
-  task send_byte_master(logic [7:0] data, logic [6:0] addr);
+  task automatic send_bytes_master(int n_bytes,logic [7:0] data[N_RECEPTIONS-1:0], logic [6:0] addr);
     ena_i2c = 1;
-    adrr_r_w   = {addr, 1'b0};
-    byte_2_send = data;
-    repeat(2) @(posedge end_trans);  
+    adrr_r_w = {addr, 1'b0};
+    byte_2_send = data[n_bytes_sended];
+    repeat(1) @(posedge end_trans);
+    for (int i=0; i<n_bytes; ++i) begin      
+      byte_2_send = data[n_bytes_sended];
+      repeat(1) @(posedge end_trans);
+      n_bytes_sended++;
+    end
     #1000 @(posedge clk);
     ena_i2c = 0;
     @(negedge end_trans);
-    #1000@(posedge clk);
+    #1000 @(posedge clk);
   endtask
 
-  // Generación de reloj
+  function void generate_data(integer seed, logic mode);
+    begin 
+        for (int i=0; i<N_RECEPTIONS; ++i) begin
+            if (mode) begin
+                data_sended[i] = i+seed;
+            end else begin
+                data_sended[i] = $urandom(i+seed);
+            end
+        end
+    end
+  endfunction 
+
+  // Generación del reloj (clk)
   initial begin
     clk = 0;
     forever #(CLK_PERIOD/2) clk = ~clk;
   end
 
-  // Generación de reset e Inicialización de señales
+  // Inicialización de señales y reset
   initial begin
     ena_i2c     = 0;
-    msb_lsb     = 1;            // Suponiendo que '1' es MSB primero
-    adrr_r_w    = 8'h00;        // Ejemplo de dirección (7-bit + bit W)
-    byte_2_send = 8'h00;        // Ejemplo de byte a enviar
-    arstn = 0;
-    #20 @(posedge clk);         // Mantener el reset por 20 ns
+    msb_lsb     = 1;            // MSB primero
+    adrr_r_w    = 8'h00;        
+    byte_2_send = 8'h00;        
+    arstn       = 0;
+
+    generate_data(0, 1);
+    agent_i2c_h = new(i2c_vif, data_sended);
+
+    #20 @(posedge clk);
     arstn = 1;
   end
 
-  // Estímulo inicial
+  // Hilo separado para la ejecución del agente (slave)
   initial begin
-    logic [6:0] addr_slave;
-    // Esperar al final del reset
+    @(posedge arstn);
+    forever begin
+      agent_i2c_h.i2c_slave_handle_frame();
+    end
+  end
+
+  // Secuencia principal del test
+  initial begin
+    logic [6:0] addr_slave = 7'h34;
+    int n_bytes;
+    int i;
+
     @(posedge arstn);
     #20 @(posedge clk);
 
-    addr_slave = 7'h34;
-    send_byte_master(8'h34, addr_slave);
-    read_byte_master(data_received_master, addr_slave);
+    n_bytes = $urandom_range(1, 10);
+    for (i=0; i<N_RECEPTIONS-10; i+=n_bytes) begin
+      n_bytes = $urandom_range(1, 10);
+      // Enviar byte al slave (desde el master)
+      send_bytes_master(n_bytes, data_sended, addr_slave);
+      #40000;  
+    end
+    send_bytes_master(N_RECEPTIONS-i, data_sended, addr_slave);
+    #40000;  
 
-    // Finalizar simulación tras un tiempo adicional
+    n_bytes = $urandom_range(1, 10);
+    for (i=0; i<N_RECEPTIONS-10; i+=n_bytes) begin
+      n_bytes = $urandom_range(1, 10);
+      // Leer byte desde el slave (desde el master)
+      read_bytes_master(n_bytes, data_received, addr_slave);
+      #40000;  
+    end
+    read_bytes_master(N_RECEPTIONS-i, data_received, addr_slave);
+    #40000;
+
+    // Validar los bytes recibidos
+    validate_received_bytes();
+
+    // Finaliza la simulación tras tiempo extra para observación
     #40000;
     $finish;
-  end
-
-
-  initial begin
-    data_sended_slave = 8'h29;  // Ejemplo de byte a enviar
-    state_i2c_slave = idle;
-    release sda;
-    forever begin
-      case (state_i2c_slave)
-        idle: begin
-          @(negedge sda iff scl);
-          state_i2c_slave = addr_r_w;
-        end
-        addr_r_w: begin
-          read_byte_slave(addres_received_slave);
-          state_i2c_slave = ack;
-        end
-        ack: begin
-          gen_ack();
-          if (addres_received_slave[0])
-            state_i2c_slave = send_byte_st;
-          else
-            state_i2c_slave = receive_byte_st;
-        end
-        send_byte_st: begin
-          fork
-            begin
-              send_byte_slave(data_sended_slave);
-              state_i2c_slave = ack;
-            end
-            begin
-              @(posedge sda iff scl);
-              state_i2c_slave = idle;
-            end
-          join_any
-        end
-        receive_byte_st: begin
-          fork
-            begin
-              read_byte_slave(data_received_slave);
-              state_i2c_slave = ack;
-            end
-            begin
-              @(posedge sda iff scl);
-              state_i2c_slave = idle;
-            end
-          join_any
-        end
-      endcase
-    end
   end
 
 endmodule
