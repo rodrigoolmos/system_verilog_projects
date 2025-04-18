@@ -1,4 +1,4 @@
-`timescale 1us/1ns
+`timescale 1ns/1ps
 
 interface apb_if #(parameter ADDR_WIDTH = 32,
                    parameter DATA_WIDTH = 32);
