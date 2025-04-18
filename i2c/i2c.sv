@@ -13,6 +13,7 @@ module i2c #(
     // end of transaction lower ena_i2c when end_trans 1 if you dont want to send more bytes
     // when this signal is 1 the byte_received is ready to be read or the byte_2_send is ready to be written
     output logic        end_trans,          
+    output logic        addr_trans,          
     input  logic        msb_lsb,            // msb = 1 or lsb = 0
     input  logic[7:0]   adrr_r_w,           // slave addres + (r/w) bit
 
@@ -69,6 +70,7 @@ module i2c #(
         end else begin
             case (state_i2c)
                 idle: begin
+                addr_trans <= 0;
                 reset_clk_div <= 1;
                     if (ena_i2c) begin
                         if (clk_div == 1) begin
@@ -83,6 +85,7 @@ module i2c #(
                     end
                 end
                 addr: begin
+                    addr_trans <= 1;
                     if (clk_div == HALF_CNT) begin
                         bit_cnt <= bit_cnt - 1;
                         if (bit_cnt == 1) begin
@@ -115,6 +118,7 @@ module i2c #(
                     end
                 end
                 wait_time: begin
+                    addr_trans <= 0;
                     if (clk_div == HALF_CNT) begin
                         bit_cnt <= bit_cnt - 1;
                         if (bit_cnt == 0) begin
