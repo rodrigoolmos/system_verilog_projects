@@ -257,10 +257,12 @@ module tb_apb_2_i2c;
         int num_bytes_send;
         int count;
         @(posedge apb_if_inst.presetn);
-        #10000;
+        #10000 @(posedge apb_if_inst.pclk);
+
         // SET ADDRESS
         agent_APB_m_h.write_APB_data(7'h34, ADDR_WRITE_I2C_ADDR);
-        #1000000;
+        #1000000 @(posedge apb_if_inst.pclk);
+        
         test_empty_fifo_rx();
         test_empty_fifo_tx();
 
