@@ -157,20 +157,20 @@ module tb_i2c;
       n_bytes = $urandom_range(1, 10);
       // Enviar byte al slave (desde el master)
       send_bytes_master(n_bytes, data_sended, addr_slave);
-      #40000;  
+      #40000 @(posedge clk); 
     end
     send_bytes_master(N_RECEPTIONS-i, data_sended, addr_slave);
-    #40000;  
+    #40000 @(posedge clk); 
 
     n_bytes = $urandom_range(1, 10);
     for (i=0; i<N_RECEPTIONS-10; i+=n_bytes) begin
       n_bytes = $urandom_range(1, 10);
       // Leer byte desde el slave (desde el master)
       read_bytes_master(n_bytes, data_received, addr_slave);
-      #40000;  
+      #40000 @(posedge clk);
     end
     read_bytes_master(N_RECEPTIONS-i, data_received, addr_slave);
-    #40000;
+    #40000 @(posedge clk);
 
     // Validar los bytes recibidos
     validate_received_bytes();
