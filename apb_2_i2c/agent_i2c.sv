@@ -182,7 +182,7 @@ class agent_i2c #(parameter int N_RECEPTIONS = 256,
                             i2c_vif.sda_slave_drive = 1'bz;
                             read_byte_slave(data);
                             bytes_readed[read_pointer] = data;
-                            assert (bytes_readed[read_pointer] == bytes_expected[read_pointer])
+                            expected_data : assert (bytes_readed[read_pointer] == bytes_expected[read_pointer])
                                 else $error("Error los datos enviados y leidos no cuadran %h, %h", 
                                           bytes_readed[read_pointer], bytes_expected[read_pointer]);
 
