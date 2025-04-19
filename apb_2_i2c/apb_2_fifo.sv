@@ -20,6 +20,7 @@ module apb_2_fifo #(
 
     // slave addres + (r/w) bit
     output logic[7:0]                 adrr_r_w,
+    input  logic                      transaction_ok,
 
     // fifo out tx
     input  logic                      read_fifo_tx,
@@ -185,8 +186,12 @@ module apb_2_fifo #(
     always_comb begin
         if (penable && !pslverr && psel && !pwrite) begin
             case (reg_addr[4:2])
-                ADDR_READ_TX_STATUS: prdata = {{28{1'b0}}, full_tx, almost_full_tx, empty_tx, almost_empty_tx};
-                ADDR_READ_RX_STATUS: prdata = {{27{1'b0}}, end_rx, full_rx, almost_full_rx, empty_rx, almost_empty_rx};
+                ADDR_READ_TX_STATUS: prdata = {{28{1'b0}}, transaction_ok,   1'b0,
+                                full_tx, almost_full_tx, empty_tx, almost_empty_tx};
+
+                ADDR_READ_RX_STATUS: prdata = {{27{1'b0}}, transaction_ok, end_rx,
+                                full_rx, almost_full_rx, empty_rx, almost_empty_rx};
+                                
                 ADDR_READ_RX_DATA:   prdata = regs_rx[index_read_rx];
                 default: prdata = 0;
             endcase

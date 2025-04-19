@@ -168,13 +168,13 @@ class agent_i2c #(parameter int N_RECEPTIONS = 256,
         @(negedge i2c_vif.sda iff i2c_vif.scl); // Start condition
         $display("Start condition detected, reading address");
         read_byte_slave(addr_received); // lee dirección
-        $display("Slave: Address received = %h actual address %h", addr_received[7:1], i2c_addr);
+        $display("  Address received = %h actual address %h", addr_received[7:1], i2c_addr);
         if(i2c_addr == addr_received[7:1]) begin
             gen_ack();
             if(addr_received[0] == 1'b0)
-                $display("Slave: Write operation");
+                $display("  Write operation");
             else
-                $display("Slave: Read operation");
+                $display("  Read operation");
             fork : frame_fork
                 begin
                     forever begin
@@ -184,25 +184,25 @@ class agent_i2c #(parameter int N_RECEPTIONS = 256,
                             bytes_readed[read_pointer] = data;
                             expected_data : assert (bytes_readed[read_pointer] == bytes_expected[read_pointer])
                                 else $error("Error los datos enviados y leidos no cuadran %h, %h", 
-                                          bytes_readed[read_pointer], bytes_expected[read_pointer]);
+                                        bytes_readed[read_pointer], bytes_expected[read_pointer]);
 
+                            $display("  Data readed = %h expected = %h", data, bytes_expected[read_pointer]);
                             read_pointer++;
-                            $display("Data readed = %h", data);
                         end else if (addr_received[0] == 1'b1) begin
                             data = bytes_readed[write_pointer];
                             send_byte_slave(data);
                             write_pointer++;
-                            $display("Data sended = %h", data);
+                            $display("  Data sended = %h", data);
                         end
                         gen_ack();
-                        $display("ACK sent");
+                        $display("  ACK sent");
                         //@(negedge i2c_vif.scl);
                     end
                 end
 
                 begin
                     @(posedge i2c_vif.sda iff i2c_vif.scl); // stop condition
-                    $display("End of transmission");
+                    $display("  End of transmission");
                 end 
             join_any
 	    disable frame_fork;

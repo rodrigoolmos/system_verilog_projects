@@ -32,6 +32,7 @@ module apb_2_i2c #(
     logic                       end_trans_ff;
     logic                       addr_trans;
     logic [7:0]                 adrr_r_w;
+    logic                       transaction_ok;
 
     logic                       read_fifo_tx;
     logic                       empty_tx;
@@ -61,6 +62,7 @@ module apb_2_i2c #(
         .addr_trans(addr_trans),
         .msb_lsb(MSB_LSB),                  // msb = 1 or lsb = 0
         .adrr_r_w(adrr_r_w),                // slave addres + (r/w) bit
+        .transaction_ok(transaction_ok),    // 1 = transaction ok 0 = transaction error
     
         // i2c signals
         .sda(sda),
@@ -89,6 +91,7 @@ module apb_2_i2c #(
     
         // slave addres + (r/w) bit
         .adrr_r_w(adrr_r_w),
+        .transaction_ok(transaction_ok),
 
         // fifo out tx
         .read_fifo_tx(read_fifo_tx),
@@ -113,7 +116,7 @@ module apb_2_i2c #(
     always_comb begin
         ena_i2c = !end_rx || !empty_tx;
         read_fifo_tx = (end_trans && !end_trans_ff) && !addr_trans;
-        write_fifo_rx = (end_trans && !end_trans_ff) && ! end_rx;
+        write_fifo_rx = (end_trans && !end_trans_ff) && ! end_rx && !addr_trans;
     end
 
 endmodule

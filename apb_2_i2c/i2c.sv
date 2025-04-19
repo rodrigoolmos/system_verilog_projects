@@ -16,7 +16,7 @@ module i2c #(
     output logic        addr_trans,          
     input  logic        msb_lsb,            // msb = 1 or lsb = 0
     input  logic[7:0]   adrr_r_w,           // slave addres + (r/w) bit
-
+    output logic        transaction_ok,     // 1 = transaction ok 0 = transaction error
 
     // i2c signals
     inout  logic        sda,
@@ -32,7 +32,6 @@ module i2c #(
     logic reset_clk_div;
     logic send_receive;             // 0 = send 1 = receive
     logic[2:0] bit_cnt;
-    logic transaction_ok;
 
     localparam MAX_CNT = (CLK_FREQ/I2C_FREQ) - 1;
     localparam HALF_CNT = MAX_CNT/2;
@@ -105,7 +104,6 @@ module i2c #(
                         transaction_ok <= ~sda_i;
                     end else if (clk_div == HALF_CNT) begin
                         if (transaction_ok) begin
-                            transaction_ok <= 0;
                             if (ena_i2c) begin
                                 bit_cnt <= BITS_WAIT - 1;
                                 state_i2c <= wait_time;
