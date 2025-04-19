@@ -153,7 +153,7 @@ module tb_apb_2_spi;
 
     task wait_fifo_tx_empty();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
-        while(apb_read_data != EMPTY) begin
+        while(apb_read_data[3:0] != EMPTY) begin
             @(posedge apb_if_inst.pclk);
             agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
         end
@@ -179,7 +179,7 @@ module tb_apb_2_spi;
     task automatic read_mosi_rx();
         static int i;
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
-        while(apb_read_data != EMPTY) begin
+        while(apb_read_data[3:0] != EMPTY) begin
             agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_DATA);
             data_spi_miso_readed[i] = apb_read_data[7:0];
             agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
@@ -202,61 +202,61 @@ module tb_apb_2_spi;
 
     task automatic test_empty_fifo_rx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
-        assert (apb_read_data == EMPTY) 
+        assert (apb_read_data[3:0] == EMPTY) 
                 else $error("APB read RX status flag is not empty");
     endtask
 
     task automatic test_empty_fifo_tx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
-        assert (apb_read_data == EMPTY) 
+        assert (apb_read_data[3:0] == EMPTY) 
                 else $error("APB read TX status flag is not empty");
     endtask
 
     task automatic test_almost_empty_fifo_rx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
-        assert (apb_read_data == ALMOST_EMPTY) 
+        assert (apb_read_data[3:0] == ALMOST_EMPTY) 
                 else $error("APB read RX status flag is not almost empty");
     endtask
 
     task automatic test_almost_empty_fifo_tx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
-        assert (apb_read_data == ALMOST_EMPTY) 
+        assert (apb_read_data[3:0] == ALMOST_EMPTY) 
                 else $error("APB read TX status flag is not almost empty");
     endtask
 
     task automatic test_full_fifo_rx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
-        assert (apb_read_data == FULL) 
+        assert (apb_read_data[3:0] == FULL) 
                 else $error("APB read RX status flag is not full");
     endtask
 
     task automatic test_full_fifo_tx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
-        assert (apb_read_data == FULL) 
+        assert (apb_read_data[3:0] == FULL) 
                 else $error("APB read TX status flag is not full");
     endtask
 
     task automatic test_almost_full_fifo_rx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
-        assert (apb_read_data == ALMOST_FULL) 
+        assert (apb_read_data[3:0] == ALMOST_FULL) 
                 else $error("APB read RX status flag is not almost full");
     endtask
 
     task automatic test_almost_full_fifo_tx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
-        assert (apb_read_data == ALMOST_FULL) 
+        assert (apb_read_data[3:0] == ALMOST_FULL) 
                 else $error("APB read TX status flag is not almost full");
     endtask
 
     task automatic test_none_tx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_TX_STATUS);
-        assert (apb_read_data == NONE) 
+        assert (apb_read_data[3:0] == NONE) 
                 else $error("APB read TX status flag NONE ERROR");
     endtask
 
     task automatic test_none_rx();
         agent_APB_m_h.read_APB_data(apb_read_data, ADDR_READ_RX_STATUS);
-        assert (apb_read_data == NONE) 
+        assert (apb_read_data[3:0] == NONE) 
                 else $error("APB read RX status flag NONE ERROR");
     endtask
 
