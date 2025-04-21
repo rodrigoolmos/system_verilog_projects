@@ -58,35 +58,39 @@ module apb_checker #(parameter AXI_ADDR_WIDTH = 32,
 
     // Propiedad para verificar la secuencia de handshake de addr escritura
     property aw_handshake;
-        @(posedge axi_lite.S_AXI_ACLK)
+        @(posedge axi_lite.S_AXI_ACLK) disable iff (!axi_lite.S_AXI_ARESETN)
         seq_A_rise_B_rise_A_fall(axi_lite.S_AXI_AWVALID,
                                  axi_lite.S_AXI_AWREADY);
     endproperty
-    assert property (aw_handshake);
+    assert property (aw_handshake)
+        else $error("AW handshake failed, AWVALID, AWREADY");
 
     // Propiedad para verificar la secuencia de handshake de data escritura
     property w_handshake;
-        @(posedge axi_lite.S_AXI_ACLK)
+        @(posedge axi_lite.S_AXI_ACLK) disable iff (!axi_lite.S_AXI_ARESETN)
         seq_A_rise_B_rise_A_fall(axi_lite.S_AXI_WVALID,
                                  axi_lite.S_AXI_WREADY);
     endproperty
-    assert property (w_handshake);
+    assert property (w_handshake)
+        else $error("W handshake failed, WVALID, WREADY");
     
     // Propiedad para verificar la secuencia de handshake de addr lectura
     property ar_handshake;
-        @(posedge axi_lite.S_AXI_ACLK)
+        @(posedge axi_lite.S_AXI_ACLK) disable iff (!axi_lite.S_AXI_ARESETN)
         seq_A_rise_B_rise_A_fall(axi_lite.S_AXI_ARVALID,
                                  axi_lite.S_AXI_ARREADY);
     endproperty
-    assert property (ar_handshake);
+    assert property (ar_handshake)
+        else $error("AR handshake failed, ARVALID, ARREADY");
 
     // Propiedad para verificar la secuencia de handshake de data lectura
     property r_handshake;
-        @(posedge axi_lite.S_AXI_ACLK)
+        @(posedge axi_lite.S_AXI_ACLK) disable iff (!axi_lite.S_AXI_ARESETN)
         seq_A_rise_B_rise_A_fall(axi_lite.S_AXI_RVALID,
                                  axi_lite.S_AXI_RREADY);
     endproperty
-    assert property (r_handshake);
+    assert property (r_handshake)
+        else $error("R handshake failed, RVALID, RREADY");
 
 endmodule
 

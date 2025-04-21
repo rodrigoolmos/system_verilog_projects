@@ -75,6 +75,17 @@ module tb_axi_lite_template_slave;
         // Inicializa el bus AXI
         axi_vif.S_AXI_ACLK = 0;
         axi_vif.S_AXI_ARESETN = 0;
+        axi_vif.S_AXI_AWADDR = 0;
+        axi_vif.S_AXI_AWPROT = 0;
+        axi_vif.S_AXI_AWVALID = 0;
+        axi_vif.S_AXI_WDATA = 0;
+        axi_vif.S_AXI_WSTRB = 0;
+        axi_vif.S_AXI_WVALID = 0;
+        axi_vif.S_AXI_BREADY = 0;
+        axi_vif.S_AXI_ARADDR = 0;
+        axi_vif.S_AXI_ARPROT = 0;
+        axi_vif.S_AXI_ARVALID = 0;
+        axi_vif.S_AXI_RREADY = 0;
         axi_master = new(axi_vif);
 
         repeat (20) @(posedge axi_vif.S_AXI_ACLK);
