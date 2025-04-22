@@ -120,6 +120,7 @@ module tb_axi_lite_template_slave;
                              data_i, send_data[data_i], read_data[data_i]);
         end
 
+        #3000;
         $finish;
     end
 
