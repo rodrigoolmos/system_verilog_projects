@@ -18,10 +18,6 @@ module apb_2_fifo #(
     output logic [DATA_WIDTH-1:0]     prdata,
     output logic                      pslverr,
 
-    // slave addres + (r/w) bit
-    output logic[7:0]                 adrr_r_w,
-    input  logic                      transaction_ok,
-
     // fifo out tx
     input  logic                      read_fifo_tx,
     output logic                      empty_tx,
@@ -31,20 +27,16 @@ module apb_2_fifo #(
     // fifo in rx
     input  logic                      write_fifo_rx,
     output logic                      full_rx,
-    output logic                      end_rx,
     output logic                      almost_full_rx,
     input  logic [DATA_WIDTH-1:0]     fifo_w_data_rx
 );
 
-    localparam ADDR_READ_TX_STATUS  = 3'b000;
-    localparam ADDR_WRITE_TX        = 3'b000;
-    localparam ADDR_READ_RX_STATUS  = 3'b001;
-    localparam ADDR_READ_RX_DATA    = 3'b010;
-    localparam ADDR_WRITE_N_READS   = 3'b011;
-    localparam ADDR_WRITE_I2C_ADDR  = 3'b100;
+    localparam ADDR_READ_TX_STATUS  = 2'b00;
+    localparam ADDR_WRITE_TX        = 2'b00;
+    localparam ADDR_READ_RX_STATUS  = 2'b01;
+    localparam ADDR_READ_RX_DATA    = 2'b10;
 
-
-    localparam N_REGS_ADDR          = 5;
+    localparam N_REGS_ADDR          = 3;
 
 
 
@@ -65,14 +57,7 @@ module apb_2_fifo #(
     logic                       empty_rx;
     logic                       read_fifo_rx;
 
-    logic [4:0] reg_addr;
-
-
-    logic ena_write_n_reads;
-    logic ena_i2c_addr;
-    logic [$clog2(DEPTH):0] n_reads;
-    logic [$clog2(DEPTH):0] reads_cnt;
-
+    logic [3:0] reg_addr;
 
     /*******************      RX      *********************/
     // Logica escritura fifo rx
@@ -122,7 +107,7 @@ module apb_2_fifo #(
     end
     
     // enable read fifo rx
-    always_comb read_fifo_rx = psel & ~pwrite & penable & ~pslverr & (reg_addr[4:2] == ADDR_READ_RX_DATA);
+    always_comb read_fifo_rx = psel & ~pwrite & penable & ~pslverr & (reg_addr[3:2] == ADDR_READ_RX_DATA);
 
     /*******************      TX      *********************/
     // Logica escritura APB a fifo tx
@@ -171,7 +156,8 @@ module apb_2_fifo #(
     always_comb fifo_r_data_tx = regs_tx[index_read_tx];
 
     // enable write to fifo tx
-    always_comb write_fifo_tx = psel & pwrite & penable & ~pslverr & (reg_addr[4:2] == ADDR_WRITE_TX);
+    always_comb write_fifo_tx = psel & pwrite & penable & ~pslverr & (reg_addr[3:2] == ADDR_WRITE_TX);
+
 
 
     /****************** APB *****************/
@@ -185,51 +171,14 @@ module apb_2_fifo #(
     // lectura apb
     always_comb begin
         if (penable && !pslverr && psel && !pwrite) begin
-            case (reg_addr[4:2])
-                ADDR_READ_TX_STATUS: prdata = {{28{1'b0}}, transaction_ok,   1'b0,
-                                full_tx, almost_full_tx, empty_tx, almost_empty_tx};
-
-                ADDR_READ_RX_STATUS: prdata = {{27{1'b0}}, transaction_ok, end_rx,
-                                full_rx, almost_full_rx, empty_rx, almost_empty_rx};
-                                
+            case (reg_addr[3:2])
+                ADDR_READ_TX_STATUS: prdata = {{28{1'b0}}, full_tx, almost_full_tx, empty_tx, almost_empty_tx};
+                ADDR_READ_RX_STATUS: prdata = {{28{1'b0}}, full_rx, almost_full_rx, empty_rx, almost_empty_rx};
                 ADDR_READ_RX_DATA:   prdata = regs_rx[index_read_rx];
                 default: prdata = 0;
             endcase
         end else begin
             prdata = 0;
-        end
-    end
-
-
-    // enable write to number of reads
-    always_comb ena_write_n_reads = psel & pwrite & penable & ~pslverr & (reg_addr[4:2] == ADDR_WRITE_N_READS);
-
-    always_ff @(posedge pclk or negedge presetn) begin
-        if (!presetn) begin
-            n_reads <= 0;
-            reads_cnt <= 0;
-        end else if (ena_write_n_reads) begin
-            n_reads <= pwdata;
-        end else if (reads_cnt < n_reads && n_reads != 0) begin
-            if (write_fifo_rx) begin
-                reads_cnt <= reads_cnt + 1;
-            end
-        end else begin
-            reads_cnt <= 0;
-            n_reads <= 0;
-        end
-    end
-    
-    always_comb end_rx = n_reads == 0;
-    
-    // enable write i2c address
-    always_comb ena_i2c_addr = psel & pwrite & penable & ~pslverr & (reg_addr[4:2] == ADDR_WRITE_I2C_ADDR);
-    
-    always_ff @(posedge pclk or negedge presetn) begin
-        if (!presetn) begin
-            adrr_r_w <= 0;
-        end else if (ena_i2c_addr) begin
-            adrr_r_w <= pwdata;
         end
     end
 

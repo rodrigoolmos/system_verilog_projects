@@ -1,7 +1,6 @@
-`timescale 1ns/1ps
+`timescale 1us/1ns
 
-interface apb_if #(parameter ADDR_WIDTH = 32,
-                   parameter DATA_WIDTH = 32);
+interface apb_if #(parameter ADDR_WIDTH = 32, DATA_WIDTH = 32);
     logic                       pclk;
     logic [ADDR_WIDTH-1:0]      paddr;
     logic [DATA_WIDTH-1:0]      pwdata;
@@ -16,23 +15,11 @@ interface apb_if #(parameter ADDR_WIDTH = 32,
     logic                       pslverr;
 endinterface
 
-module apb_checker #(ADDR_MIN = 0, ADDR_MAX = 8) (apb_if apb);
+module apb_checker (apb_if apb);
   // Aserción: Verifica que el inicio de transferencia se realice correctamente.
   property apb_transfer_start;
     @(posedge apb.pclk) disable iff (!apb.presetn)
       (apb.psel && !apb.penable) |=> (apb.psel && apb.penable);
-  endproperty
-
-  // Aserción: Verifica la generacion de error en pslverr cuando se accede a una dirección fuera del rango permitido.
-  property apb_error_gen;
-    @(posedge apb.pclk) disable iff (!apb.presetn)
-      (apb.psel && apb.penable && apb.pready && ((apb.paddr < ADDR_MIN) || (apb.paddr > ADDR_MAX))) |-> (apb.pslverr);
-  endproperty
-
-  // Aserción: Verifica que pslverr se active solo cuando se accede a una dirección fuera del rango permitido.
-  property apb_pslverr_check;
-    @(posedge apb.pclk) disable iff (!apb.presetn)
-      (apb.pslverr == ((apb.psel && apb.penable && (apb.paddr < ADDR_MIN || apb.paddr > ADDR_MAX)) ? 1'b1 : 1'b0));
   endproperty
 
   // Aserción: Verifica la estabilidad de la dirección y la señal de control de escritura durante la transferencia.
@@ -75,18 +62,6 @@ module apb_checker #(ADDR_MIN = 0, ADDR_MAX = 8) (apb_if apb);
   a_penable_without_psel: assert property(penable_without_psel)
     else begin
       $error("ERROR: PENABLE activo sin PSEL en APB.");
-      $stop;
-    end
-
-  a_error_gen: assert property(apb_error_gen)
-    else begin
-      $error("ERROR: Generación de error en PSLVERR fallida.");
-      $stop;
-    end
-  
-  a_pslverr_check: assert property(apb_pslverr_check)
-    else begin
-      $error("ERROR: PSLVERR no se activa correctamente.");
       $stop;
     end
 
