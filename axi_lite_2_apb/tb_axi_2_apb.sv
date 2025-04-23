@@ -117,19 +117,23 @@ module tb_axi_2_apb;
         // Esperar a que el reset se complete
         @(posedge axi_if_inst.S_AXI_ARESETN);
 
-        apb_slave.active();
-        
-        // Escribir datos en el bus APB
-        for (int index=0; index<N_REGS; ++index) begin
-            axi_master.write_AXI_data(index, (DATA_WIDTH/8)*index, 4'b1111);
+        for (int iterations=0; iterations<10; ++iterations) begin
+            apb_slave.active(iterations);
+            
+            // Escribir datos en el bus APB
+            for (int index=0; index<N_REGS; ++index) begin
+                axi_master.write_AXI_data(index + iterations, (DATA_WIDTH/8)*index, 4'b1111);
+            end
+    
+            // Leer datos del bus APB
+            for (int index=0; index<N_REGS; ++index) begin
+                axi_master.read_AXI_data(readed_data, (DATA_WIDTH/8)*index);
+                assert (readed_data == index + iterations) 
+                else $error("Read data mismatch: expected %0d, got %0d", 
+                                        index + iterations, readed_data);
+            end
         end
 
-        // Leer datos del bus APB
-        for (int index=0; index<N_REGS; ++index) begin
-            axi_master.read_AXI_data(readed_data, (DATA_WIDTH/8)*index);
-            assert (readed_data == index) 
-            else $error("Read data mismatch: expected %0d, got %0d", index, readed_data);
-        end
 
         // Finalizar la simulación
         #100;

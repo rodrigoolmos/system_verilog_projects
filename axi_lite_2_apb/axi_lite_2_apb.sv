@@ -109,12 +109,15 @@ module axi_lite_2_apb #
 			S_AXI_BVALID <= 0;
 			S_AXI_BRESP <= 0;
 		end else begin
-			if (bridge_state_w == wait_w && !S_AXI_BVALID) begin
-				S_AXI_BVALID <= S_AXI_BREADY;
-				S_AXI_BRESP <= PSLVERR ? 2'b10 : 2'b00;
+			if (bridge_state_w == wait_w) begin
+				if (!S_AXI_BVALID) begin
+					S_AXI_BRESP  <= PSLVERR ? 2'b10 : 2'b00;
+					S_AXI_BVALID <= 1'b1;
+				end else if (S_AXI_BREADY) begin
+					S_AXI_BVALID <= 1'b0;
+				end
 			end else begin
 				S_AXI_BVALID <= 0;
-				S_AXI_BRESP <= 0;
 			end
 		end
 	end
@@ -175,7 +178,7 @@ module axi_lite_2_apb #
 		PSEL    = PWRITE ? pselw : pselr;
 		PENABLE = PWRITE ? penablew : penabler;
 		PSTRB   = S_AXI_WSTRB;
-		PPROT  = S_AXI_AWPROT;
+		PPROT   = PWRITE ? S_AXI_AWPROT : S_AXI_ARPROT;
 	end 
 
 

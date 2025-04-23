@@ -13,6 +13,79 @@ interface apb_if #(parameter ADDR_WIDTH = 32, DATA_WIDTH = 32);
     logic                       pslverr;
 endinterface
 
+module apb_checker #(parameter ADDR_WIDTH = 32, 
+                     parameter DATA_WIDTH = 32) 
+                     (apb_if apb_vif);
+
+    // Setup phase
+    // stable: PADDR PWRITE PPROT PWDATA
+    property stable_signals;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+        apb_vif.psel |-> $stable(apb_vif.paddr)  &&
+                         $stable(apb_vif.pwrite) &&
+                         $stable(apb_vif.pprot)  &&
+                         $stable(apb_vif.pstrb)  &&
+                         $stable(apb_vif.pwdata);
+    endproperty
+    assert property (stable_signals) 
+        else $error("PADDR, PWRITE, PPROT, PWDATA not stable");
+
+    // Enable phase
+    property psel_enable;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            apb_vif.psel |=> !apb_vif.penable ##1 apb_vif.penable;
+    endproperty
+    assert property (psel_enable) 
+        else $error("Not generating apb_vif.psel |=> !apb_vif.penable ##1 apb_vif.penable");
+
+    // End phase
+    property end_phase;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            (apb_vif.pready && apb_vif.psel && apb_vif.penable) |=> 
+                                (!apb_vif.psel && !apb_vif.penable);
+    endproperty
+    assert property (end_phase) 
+            else $error("Not generatinf end_phase correctly");
+
+    property no_enable_without_select;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            apb_vif.penable |-> $past(apb_vif.psel);
+    endproperty
+    assert property (no_enable_without_select) 
+        else $error("apb_vif.penable without apb_vif.psel");
+
+    property setup_phase;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            $rose(apb_vif.psel) |-> (!apb_vif.penable);
+    endproperty
+    assert property (setup_phase) 
+        else $error("apb_vif.psel and apb_vif.penable rose at the same time");
+
+    property pready_only_when_enable;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            apb_vif.pready |-> apb_vif.penable;
+    endproperty
+    assert property (pready_only_when_enable) 
+        else $error("apb_vif.pready without apb_vif.penable");
+
+    property idle_after_end;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            (apb_vif.psel && apb_vif.penable && apb_vif.pready) 
+                |=> 
+            ##[1:$] (!apb_vif.psel && !apb_vif.penable);
+    endproperty
+    assert property (idle_after_end) 
+        else $error("Not !apb_vif.psel && !apb_vif.penable after end phase");
+
+    property penable_implies_psel;
+        @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
+            apb_vif.penable |-> apb_vif.psel;
+    endproperty
+    assert property (penable_implies_psel)
+        else $error("PENABLE asserted without PSEL");
+
+endmodule
+
 class agent_APB_s #(parameter int N_REGS = 16, parameter int REGS_WIDTH = 32);
     // Virtual interface para acceder a las señales del bus APB
     virtual apb_if #(
@@ -37,7 +110,8 @@ class agent_APB_s #(parameter int N_REGS = 16, parameter int REGS_WIDTH = 32);
 
     // Tarea que escucha en el bus APB
     task active(int n_clk_delay = 0);
-        fork
+        disable apb_read_write;
+        fork : apb_read_write
             forever begin
                 apb_vif.pready = 0;
                 @(posedge apb_vif.pclk iff
