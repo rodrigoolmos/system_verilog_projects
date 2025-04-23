@@ -24,7 +24,7 @@ interface axi_lite_if #(parameter AXI_ADDR_WIDTH = 32, AXI_DATA_WIDTH = 32);
     logic                                   S_AXI_RREADY;
 endinterface
 
-module apb_checker #(parameter AXI_ADDR_WIDTH = 32, 
+module axi_checker #(parameter AXI_ADDR_WIDTH = 32, 
                     parameter AXI_DATA_WIDTH = 32) 
                     (axi_lite_if axi_lite);
 
