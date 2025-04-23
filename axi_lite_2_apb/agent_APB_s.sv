@@ -15,12 +15,20 @@ endinterface
 
 class agent_APB_s #(parameter int N_REGS = 16, parameter int REGS_WIDTH = 32);
     // Virtual interface para acceder a las señales del bus APB
-    virtual apb_if apb_vif;    
-    logic[N_REGS-1:0] regs[REGS_WIDTH-1:0];
+    virtual apb_if #(
+        .ADDR_WIDTH($clog2(N_REGS)+(REGS_WIDTH/8)),
+        .REGS_WIDTH(REGS_WIDTH)
+    ) apb_vif; 
+    logic[REGS_WIDTH-1:0] regs[N_REGS-1:0];
     int idx;
 
     // Constructor que recibe el virtual interface
-    function new(virtual apb_if apb_vif);
+    function new(
+        virtual apb_if #(
+            .ADDR_WIDTH($clog2(N_REGS)+(REGS_WIDTH/8)), 
+            .REGS_WIDTH(REGS_WIDTH)
+        ) apb_vif = null
+    );
         this.apb_vif = apb_vif;
         this.apb_vif.pready = 0;
         this.apb_vif.pslverr = 0;
@@ -35,7 +43,7 @@ class agent_APB_s #(parameter int N_REGS = 16, parameter int REGS_WIDTH = 32);
                 @(posedge apb_vif.pclk iff
                     apb_vif.psel && apb_vif.penable);
                 repeat(n_clk_delay) @(posedge apb_vif.pclk);
-                idx = apb_vif.paddr[clog2(N_REGS)+1:2]; // word‑aligned address
+                idx = apb_vif.paddr[$clog2(N_REGS)+1:2]; // word‑aligned address
 
                 if(apb_vif.pwrite) begin
                     for (int i = 0; i < REGS_WIDTH/8; i++)

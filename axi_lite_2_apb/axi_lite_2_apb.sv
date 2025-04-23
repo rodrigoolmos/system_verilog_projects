@@ -32,213 +32,151 @@ module axi_lite_2_apb #
 
 		// APB CHANNEL
 
-		output  logic [31:0]               			paddr,     // Dirección de la transacción
-		output  logic [2:0]                			pprot,     // Bits de protección (privilegios, cache, bufferable…)
-		output  logic                      			psel,      // Señal de selección de este esclavo
-		output  logic                      			penable,   // Fase ENABLE de la transferencia APB
-		output  logic                      			pwrite,    // 1=Escritura, 0=Lectura
-		output  logic [AXI_DATA_WIDTH-1:0]     		pwdata,    // Datos de escritura al esclavo
-		output  logic [(AXI_DATA_WIDTH/8)-1:0] 		pstrb,     // Máscara de bytes válidos en la escritura
-		input   logic                      			pready,    // 1=Transferencia completada, 0=esclavo ocupado
-		input   logic [AXI_DATA_WIDTH-1:0]     		prdata,    // Datos de lectura desde el esclavo
-		input   logic                      			pslverr    // 1=Error de esclavo (p.ej. dirección inválida)
+		output  logic [AXI_ADDR_WIDTH-1:0]          PADDR,     // Dirección de la transacción
+		output  logic [2:0]                			PPROT,     // Bits de protección (privilegios, cache, bufferable…)
+		output  logic                      			PSEL,      // Señal de selección de este esclavo
+		output  logic                      			PENABLE,   // Fase ENABLE de la transferencia APB
+		output  logic                      			PWRITE,    // 1=Escritura, 0=Lectura
+		output  logic [AXI_DATA_WIDTH-1:0]     		PWDATA,    // Datos de escritura al esclavo
+		output  logic [(AXI_DATA_WIDTH/8)-1:0] 		PSTRB,     // Máscara de bytes válidos en la escritura
+		input   logic                      			PREADY,    // 1=Transferencia completada, 0=esclavo ocupado
+		input   logic [AXI_DATA_WIDTH-1:0]     		PRDATA,    // Datos de lectura desde el esclavo
+		input   logic                      			PSLVERR    // 1=Error de esclavo (p.ej. dirección inválida)
 
 	);
 
-	// AXI4LITE signals
-	logic  	                        axi_awready;
-	logic  	                        axi_wready;
-	logic [1 : 0] 	                axi_bresp;
-	logic  	                        axi_bvalid;
-	logic  	                        axi_arready;
-	logic [AXI_DATA_WIDTH-1 : 0]    axi_rdata;
-	logic [1 : 0] 	                axi_rresp;
-	logic  	                        axi_rvalid;
+	logic [AXI_ADDR_WIDTH-1 : 0]        axi_awaddr;
+	logic [AXI_ADDR_WIDTH-1 : 0]        axi_araddr;
+	logic 								pselr;
+	logic 								pselw;
+	logic 								penabler;
+	logic 								penablew;
 
-	// Example-specific design signals
-	// local parameter for addressing 32 bit / 64 bit AXI_DATA_WIDTH
-	// ADDR_LSB is used for addressing 32/64 bit registers/memories
-	// ADDR_LSB = 2 for 32 bits (n downto 2)
-	// ADDR_LSB = 3 for 64 bits (n downto 3)
-	localparam integer ADDR_LSB = (AXI_DATA_WIDTH/32) + 1;
-	localparam integer OPT_MEM_ADDR_BITS = 1;
+	typedef enum logic[1:0] { idle_w, apb_write, wait_w } bridge_state_w_t;
+	bridge_state_w_t bridge_state_w;
 
-	//----------------------------------------------
-	//-- Signals for user logic register space example
-	//------------------------------------------------
-	//-- Number of Slave Registers 4
-	logic	                    slv_reg_rden;
-	logic	                    slv_reg_wren;
-	logic [AXI_DATA_WIDTH-1:0]	reg_data_out;
-	integer	                    byte_index;
-	logic	                    aw_en;
-	logic	                    new_w_data;
+	typedef enum logic[1:0] { idle_r, apb_read, wait_r } bridge_state_r_t;
+	bridge_state_r_t bridge_state_r;
 
-	// I/O Connections assignments
-    always_comb begin
-        S_AXI_AWREADY	= axi_awready;
-        S_AXI_WREADY	= axi_wready;
-        S_AXI_BRESP	    = axi_bresp;
-        S_AXI_BVALID	= axi_bvalid;
-        S_AXI_ARREADY	= axi_arready;
-        S_AXI_RDATA	    = axi_rdata;
-        S_AXI_RRESP	    = axi_rresp;
-        S_AXI_RVALID	= axi_rvalid;
-    end
+	// ******************************* //
+	// ****** WRITE GENERATION ******* //
+	// ******************************* //
 
-	// Implement axi_awready generation
-	// axi_awready is asserted for one S_AXI_ACLK clock cycle when both
-	// S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_awready is
-	// de-asserted when reset is low.
+	// Implement of APB write generation
 	always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	            axi_awready <= 1'b0;
-	            aw_en <= 1'b1;
-	    end else begin
-	        if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en) begin
-	            // slave is ready to accept write address when 
-	            // there is a valid write address and write data
-	            // on the write address and data bus. This design 
-	            // expects no outstanding transactions. 
-	            axi_awready <= 1'b1;
-	            aw_en <= 1'b0;
-            end else if (S_AXI_BREADY && axi_bvalid) begin
-	                aw_en <= 1'b1;
-	                axi_awready <= 1'b0;
-	        end else begin
-	            axi_awready <= 1'b0;
-	        end
+	    if ( !S_AXI_ARESETN ) begin
+			bridge_state_w <= idle_w;
+			S_AXI_WREADY <= 0;
+			S_AXI_AWREADY <= 0;
+			PWDATA <= 0;
+			axi_awaddr <= 0;
+			pselw <= 0;
+			penablew <= 0;
+		end else begin
+			case (bridge_state_w)
+				idle_w: begin
+					if (S_AXI_AWVALID && S_AXI_WVALID) begin
+						bridge_state_w <= apb_write;
+						pselw <= 1;
+						axi_awaddr <= S_AXI_AWADDR;
+						PWDATA <= S_AXI_WDATA;
+					end
+				end
+				apb_write: begin
+					penablew <= 1;
+					if (PREADY) begin
+						pselw <= 0;
+						penablew <= 0;
+						bridge_state_w <= wait_w;
+						S_AXI_WREADY <= 1;
+						S_AXI_AWREADY <= 1;
+					end
+				end
+				wait_w: begin
+					PWDATA <= 0;
+					axi_awaddr <= 0;
+					S_AXI_WREADY <= 0;
+					S_AXI_AWREADY <= 0;
+					if (!S_AXI_AWVALID && !S_AXI_WVALID)
+						bridge_state_w <= idle_w;
+				end
+			endcase
 	    end
 	end
 
-	// Implement S_AXI_AWADDR latching and S_AXI_ARADDR latching
-	// This process is used to latch the address when both 
-	// S_AXI_AWVALID and S_AXI_WVALID are valid. 
 	always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	        paddr <= 0;
-	        axi_arready <= 1'b0;
-        end else begin
-	        if (~axi_awready && S_AXI_AWVALID && S_AXI_WVALID && aw_en) begin
-	            // Write Address latching
-	            paddr <= S_AXI_AWADDR;
-	        end
-			if (~axi_arready && S_AXI_ARVALID) begin
-	            // indicates that the slave has acceped the valid read address
-	            axi_arready <= 1'b1;
-	            // Read address latching
-	            paddr <= S_AXI_ARADDR;
-            end else begin
-	            axi_arready <= 1'b0;
-	        end
+	    if ( !S_AXI_ARESETN ) begin
+			S_AXI_BVALID <= 0;
+			S_AXI_BRESP <= 0;
+		end else begin
+			if (bridge_state_w == wait_w && !S_AXI_BVALID) begin
+				S_AXI_BVALID <= S_AXI_BREADY;
+				S_AXI_BRESP <= PSLVERR ? 2'b10 : 2'b00;
+			end else begin
+				S_AXI_BVALID <= 0;
+				S_AXI_BRESP <= 0;
+			end
+		end
+	end
+
+
+	// ******************************* //
+	// ******* READ GENERATION ******* //
+	// ******************************* //
+
+	// Implement of APB read generation
+	always_ff @( posedge S_AXI_ACLK ) begin
+	    if ( !S_AXI_ARESETN ) begin
+			bridge_state_r <= idle_r;
+			S_AXI_RVALID <= 0;
+			S_AXI_ARREADY <= 0;
+			penabler <= 0;
+			pselr <= 0;
+			S_AXI_RDATA <= 0;
+			S_AXI_RRESP <= 0;
+			axi_araddr <= 0;
+		end else begin
+			case (bridge_state_r)
+				idle_r: begin
+					if (S_AXI_RREADY && S_AXI_ARVALID) begin
+						bridge_state_r <= apb_read;
+						axi_araddr <= S_AXI_ARADDR;
+						pselr <= 1;
+					end
+				end
+				apb_read: begin
+					penabler <= 1;
+					if (PREADY) begin
+						penabler <= 0;
+						pselr <= 0;
+						bridge_state_r <= wait_r;
+						S_AXI_RVALID <= 1;
+						S_AXI_ARREADY <= 1;
+						S_AXI_RDATA <= PRDATA;
+						S_AXI_RRESP <= PSLVERR ? 2'b10 : 2'b00;
+					end
+				end
+				wait_r: begin
+					S_AXI_RVALID <= 0;
+					S_AXI_ARREADY <= 0;
+					if (!S_AXI_ARVALID && !S_AXI_RREADY) begin
+						bridge_state_r <= idle_r;
+						S_AXI_RDATA <= 0;
+						axi_araddr <= 0;
+					end
+				end
+			endcase
 	    end
+	end
+
+	always_comb begin
+		PWRITE  = S_AXI_WVALID;
+		PADDR   = PWRITE ? axi_awaddr : axi_araddr;
+		PSEL    = PWRITE ? pselw : pselr;
+		PENABLE = PWRITE ? penablew : penabler;
+		PSTRB   = S_AXI_WSTRB;
+		PPROT  = S_AXI_AWPROT;
 	end 
-
-	// Implement axi_wready generation
-	// axi_wready is asserted for one S_AXI_ACLK clock cycle when both
-	// S_AXI_AWVALID and S_AXI_WVALID are asserted. axi_wready is 
-	// de-asserted when reset is low. 
-    always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	        axi_wready <= 1'b0;
-	    end else begin    
-	        if (~axi_wready && S_AXI_WVALID && S_AXI_AWVALID && aw_en ) begin
-	            // slave is ready to accept write data when 
-	            // there is a valid write address and write data
-	            // on the write address and data bus. This design 
-	            // expects no outstanding transactions. 
-	            axi_wready <= 1'b1;
-            end else begin
-	            axi_wready <= 1'b0;
-	        end
-	    end 
-	end       
-
-	// Implement memory mapped register select and write logic generation
-	// The write data is accepted and written to memory mapped registers when
-	// axi_awready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted. Write strobes are used to
-	// select byte enables of slave registers while writing.
-	// These registers are cleared when reset (active low) is applied.
-	// Slave register write enable is asserted when valid address and data are available
-	// and the slave is ready to accept the write address and write data.
-	always_comb slv_reg_wren = axi_wready && S_AXI_WVALID && axi_awready && S_AXI_AWVALID;
-
-    always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	        pwdata <= 0;
-	    end else begin
-            if (slv_reg_wren) begin
-				pwdata <= S_AXI_WDATA;
-            end
-	    end
-	end    
-
-	// Implement write response logic generation
-	// The write response and response valid signals are asserted by the slave 
-	// when axi_wready, S_AXI_WVALID, axi_wready and S_AXI_WVALID are asserted.  
-	// This marks the acceptance of address and indicates the status of 
-	// write transaction.
-	always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	        axi_bvalid  <= 0;
-	        axi_bresp   <= 2'b0;
-	    end else begin    
-	        if (axi_awready && S_AXI_AWVALID && ~axi_bvalid && axi_wready && S_AXI_WVALID) begin
-	            // indicates a valid write response is available
-	            axi_bvalid <= 1'b1;
-	            axi_bresp  <= 2'b0; // 'OKAY' response 
-	        end else begin
-	            if (S_AXI_BREADY && axi_bvalid) begin
-	                //check if bready is asserted while bvalid is high) 
-	                //(there is a possibility that bready is always asserted high)   
-	                axi_bvalid <= 1'b0; 
-	            end  
-	        end
-	    end
-	end      
-
-	// Implement axi_arvalid generation
-	// axi_rvalid is asserted for one S_AXI_ACLK clock cycle when both 
-	// S_AXI_ARVALID and axi_arready are asserted. The slave registers 
-	// data are available on the axi_rdata bus at this instance. The 
-	// assertion of axi_rvalid marks the validity of read data on the 
-	// bus and axi_rresp indicates the status of read transaction.axi_rvalid 
-	// is deasserted on reset (active low). axi_rresp and axi_rdata are 
-	// cleared to zero on reset (active low).  
-    always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	        axi_rvalid <= 0;
-	        axi_rresp  <= 0;
-	    end else begin    
-	        if (axi_arready && S_AXI_ARVALID && ~axi_rvalid) begin
-	            // Valid read data is available at the read data bus
-	            axi_rvalid <= 1'b1;
-	            axi_rresp  <= 2'b0; // 'OKAY' response
-	        end else if (axi_rvalid && S_AXI_RREADY) begin
-	            // Read data is accepted by the master
-	            axi_rvalid <= 1'b0;
-	        end                
-	    end
-	end    
-
-	// Implement memory mapped register select and read logic generation
-	// Slave register read enable is asserted when valid address is available
-	// and the slave is ready to accept the read address.
-	always_comb slv_reg_rden = axi_arready & S_AXI_ARVALID & ~axi_rvalid;
-
-	// Output register or memory read data
-    always_ff @( posedge S_AXI_ACLK ) begin
-	    if ( S_AXI_ARESETN == 1'b0 ) begin
-	        axi_rdata  <= 0;
-        end else begin    
-	        // When there is a valid read address (S_AXI_ARVALID) with 
-	        // acceptance of read address by the slave (axi_arready), 
-	        // output the read dada 
-	        if (slv_reg_rden) begin
-	            axi_rdata <= prdata;     // register read data
-	        end   
-	    end
-	end    
 
 
 endmodule
