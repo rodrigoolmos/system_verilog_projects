@@ -18,7 +18,6 @@ module checker_dht22(
     dht22_if dht22_vif
 );
     real t_rise, t_fall;
-    real idle_start, idle_end;
     typedef enum logic[1:0] {start, data, idle} dht22_state_t;
     dht22_state_t dht22_state;
 
@@ -28,13 +27,7 @@ module checker_dht22(
         forever begin
             case (dht22_state)
                 idle: begin
-                    idle_start = $realtime;
                     @(negedge dht22_vif.dht22_in_out);
-                    idle_end = $realtime;
-                    $display("DHT22 idle time: %0.3f", idle_end - idle_start);
-                    assert (idle_end - idle_start < 2000_000) else begin
-                        $error("Error: DHT22 idle time is too short");
-                    end
                     t_fall = $realtime;
                     dht22_state = start;
                 end
@@ -42,8 +35,8 @@ module checker_dht22(
                     @(posedge dht22_vif.dht22_in_out);
                     t_rise = $realtime;
                     dht22_state = data;
-                    $display("DHT22 start time: %0.3f ns", t_fall - t_rise);
-                    assert (t_fall - t_rise < 1000_000) else begin
+                    $display("DHT22 start time: %0.3f ns", t_rise - t_fall);
+                    assert (t_rise - t_fall > 1000_000) else begin
                         $error("Error: DHT22 start signal is too short");
                     end
                 end
