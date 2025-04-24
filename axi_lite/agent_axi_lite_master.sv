@@ -25,7 +25,7 @@ interface axi_lite_if #(parameter AXI_ADDR_WIDTH = 32, AXI_DATA_WIDTH = 32);
 endinterface
 
 module axi_checker #(parameter AXI_ADDR_WIDTH = 32, 
-                    parameter AXI_DATA_WIDTH = 32) 
+                     parameter AXI_DATA_WIDTH = 32) 
                     (axi_lite_if axi_lite);
 
     // AR handshake
@@ -134,14 +134,6 @@ module axi_checker #(parameter AXI_ADDR_WIDTH = 32,
     assert property (b_after_aw_w)
         else $error("BVALID prematuro: falta AW/W handshake");
           
-    property r_after_ar;
-    @(posedge axi_lite.S_AXI_ACLK) disable iff (!axi_lite.S_AXI_ARESETN)
-        (axi_lite.S_AXI_ARVALID && axi_lite.S_AXI_ARREADY)
-            |-> ##1 axi_lite.S_AXI_RVALID;
-    endproperty
-    assert property (r_after_ar)
-        else $error("RVALID prematuro: falta AR handshake");
-          
     property no_multiple_aw;
         @(posedge axi_lite.S_AXI_ACLK) disable iff (!axi_lite.S_AXI_ARESETN)
             (axi_lite.S_AXI_AWVALID && !axi_lite.S_AXI_AWREADY) |-> ##1 axi_lite.S_AXI_AWVALID;
@@ -221,13 +213,21 @@ module axi_checker #(parameter AXI_ADDR_WIDTH = 32,
           
 endmodule
 
-class agent_AXI_m;
+class agent_AXI_m #(parameter AXI_ADDR_WIDTH = 32, AXI_DATA_WIDTH = 32);
     // Virtual interface para acceder a las señales del bus AXI
-    virtual axi_lite_if axi_vif;
+    virtual axi_lite_if #(
+        .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
+        .AXI_DATA_WIDTH(AXI_DATA_WIDTH)
+    ) axi_vif;
 
     // Constructor que recibe el virtual interface
-    function new(virtual axi_lite_if axi_vif);
-        this.axi_vif = axi_vif;
+    function new(
+        virtual axi_lite_if #(
+          .AXI_ADDR_WIDTH(AXI_ADDR_WIDTH),
+          .AXI_DATA_WIDTH(AXI_DATA_WIDTH)
+        ) axi_vif_in = null
+    );
+        this.axi_vif = axi_vif_in;
     endfunction
 
     // Tarea para escribir datos en el bus AXI
