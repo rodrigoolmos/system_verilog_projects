@@ -35,6 +35,18 @@ module tb_axi_2_apb;
         .REGS_WIDTH(DATA_WIDTH))
     apb_slave;
 
+    // APB checker
+    apb_checker #(.ADDR_WIDTH(ADDR_WIDTH), 
+                  .DATA_WIDTH(DATA_WIDTH)
+    ) apb_checker_inst(
+                  .apb_vif(apb_if_inst));
+
+    // AXI checker
+    axi_checker #(.AXI_ADDR_WIDTH(ADDR_WIDTH), 
+                  .AXI_DATA_WIDTH(DATA_WIDTH)
+    ) axi_checker_inst(
+                  .axi_lite(axi_if_inst));
+
     axi_lite_2_apb #
 	(
 		.AXI_DATA_WIDTH(DATA_WIDTH),

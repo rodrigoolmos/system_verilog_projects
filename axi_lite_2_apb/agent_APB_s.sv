@@ -21,7 +21,7 @@ module apb_checker #(parameter ADDR_WIDTH = 32,
     // stable: PADDR PWRITE PPROT PWDATA
     property stable_signals;
         @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
-        apb_vif.psel |-> $stable(apb_vif.paddr)  &&
+        apb_vif.psel |=> $stable(apb_vif.paddr)  &&
                          $stable(apb_vif.pwrite) &&
                          $stable(apb_vif.pprot)  &&
                          $stable(apb_vif.pstrb)  &&
@@ -33,7 +33,7 @@ module apb_checker #(parameter ADDR_WIDTH = 32,
     // Enable phase
     property psel_enable;
         @(posedge apb_vif.pclk) disable iff (!apb_vif.presetn)
-            apb_vif.psel |=> !apb_vif.penable ##1 apb_vif.penable;
+            $rose(apb_vif.psel) |-> !apb_vif.penable ##1 apb_vif.penable;
     endproperty
     assert property (psel_enable) 
         else $error("Not generating apb_vif.psel |=> !apb_vif.penable ##1 apb_vif.penable");
