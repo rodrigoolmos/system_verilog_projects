@@ -1,7 +1,6 @@
-module tb_top_dht22;
+`include "agent_dht22.sv"
 
-    timeunit 1ns;
-    timeprecision 1ps;
+module tb_top_dht22;
 
     const integer t_clk = 10;
     integer max_test = 5;
@@ -12,7 +11,6 @@ module tb_top_dht22;
     bit start_read;
     logic data_ready;
     logic sys_idle;
-    tri dht22_in_out;
     logic[2:0][3:0] humidity_bcd;
     logic negativo_temp;
     logic[2:0][3:0] temperature_bcd;
@@ -26,7 +24,13 @@ module tb_top_dht22;
     logic first_data_sended;
     logic error_transmission = 0;
 
+    agent_dht22 agent_dht22_h;
+    dht22_if    dht22_vif();
 
+    checker_dht22 checker_dht22_ins(dht22_vif);
+
+    // Pull-up virtual sobre la señal SDA
+    pullup(dht22_vif.dht22_in_out);
 
     function integer correct_data_read();
         int unsigned humidity_decimal;
@@ -71,90 +75,22 @@ module tb_top_dht22;
         return 0;
     endfunction
 
-    task send_bits(int unsigned n_bits, logic[15:0] bit_array);
-        for (int i=n_bits-1; i>=0; i = i - 1) begin
-            if (bit_array[i] == 0) begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #25us;
-            end else begin
-                force dht22_in_out = 0;
-                #50us;
-                force dht22_in_out = 1;
-                #70us;
-            end
-        end
-    endtask
-
-    task automatic generate_dht22_error(const ref logic[15:0] data_humidity,
-                                    const ref logic[15:0] data_temperature,
-                                    const ref logic[7:0] data_parity);
-
-        @(negedge dht22_in_out);
-        // host pull low
-        @(posedge dht22_in_out);
-        #36us; // host pull UP
-
-        force dht22_in_out = 0;
-        #80us;
-        force dht22_in_out = 1;
-        #80us;
-
-        // 16 bits RH data
-        send_bits(16, data_temperature);
-
-        // 16 bits T data missin
-
-        // 8 bits check sum missin
-
-        force dht22_in_out = 0;
-        #50us;
-        release dht22_in_out;
-
-    endtask
-
-    task automatic generate_dht22_data(const ref logic[15:0] data_humidity,
-                                    const ref logic[15:0] data_temperature,
-                                    const ref logic[7:0] data_parity);
-
-        @(negedge dht22_in_out);
-        // host pull low
-        @(posedge dht22_in_out);
-        #36us; // host pull UP
-
-        force dht22_in_out = 0;
-        #80us;
-        force dht22_in_out = 1;
-        #80us;
-
-        // 16 bits RH data
-        send_bits(16, data_humidity);
-
-        // 16 bits T data
-        send_bits(16, data_temperature);
-
-        // 8 bits check sum
-        send_bits(8, data_parity);
-
-        force dht22_in_out = 0;
-        #50us;
-        release dht22_in_out;
-
-    endtask
-
     initial
     forever
         #(t_clk/2) clk = ~clk;
 
-    top_dht22 #(.CLK_FREQ(100000000))
-                    top_dht22_inst (.*);
+    top_dht22 #(
+        .CLK_FREQ(100000000)
+    )top_dht22_inst (
+        .*,
+        .dht22_in_out(dht22_vif.dht22_in_out));
 
 
     initial
     begin
         fork
             begin // interface of control
+                agent_dht22_h = new(dht22_vif);
                 first_data_sended = 0;
                 start_read = 0;
                 arstn = 0;
@@ -192,37 +128,37 @@ module tb_top_dht22;
 
             begin // dth22 emulation
                 for (int i=0; i<max_test; ++i) begin
-                    release dht22_in_out;
                     seed = $urandom(seed);
                     data_humidity = $dist_uniform(seed, 0, 999); // 0-99.9%
                     seed = $urandom(seed);
                     data_temperature[14:0] = $dist_uniform(seed, 0, 900); // -90.0-90.0°C
                     seed = $urandom(seed);
                     data_temperature[15] = $dist_uniform(seed, 0, 1); // sign
-                    data_parity = data_humidity[15:8] + data_humidity[7:0] + data_temperature[15:8] + data_temperature[7:0];
-                    generate_dht22_data(data_humidity, data_temperature, data_parity);
+                    data_parity = data_humidity[15:8] + data_humidity[7:0] + 
+                                data_temperature[15:8] + data_temperature[7:0];
+                    agent_dht22_h.generate_dht22_data(data_humidity, data_temperature, data_parity);
                 end
 
-                release dht22_in_out;
                 seed = $urandom(seed);
                 data_humidity = $dist_uniform(seed, 0, 999); // 0-99.9%
                 seed = $urandom(seed);
                 data_temperature[14:0] = $dist_uniform(seed, 0, 900); // -90.0-90.0°C
                 seed = $urandom(seed);
                 data_temperature[15] = $dist_uniform(seed, 0, 1); // sign
-                data_parity = data_humidity[15:8] + data_humidity[7:0] + data_temperature[15:8] + data_temperature[7:0];
-                generate_dht22_error(data_humidity, data_temperature, data_parity);
+                data_parity = data_humidity[15:8] + data_humidity[7:0] + 
+                                data_temperature[15:8] + data_temperature[7:0];
+                agent_dht22_h.generate_dht22_error(data_humidity, data_temperature, data_parity);
 
                 for (int i=0; i<max_test; ++i) begin
-                    release dht22_in_out;
                     seed = $urandom(seed);
                     data_humidity = $dist_uniform(seed, 0, 999); // 0-99.9%
                     seed = $urandom(seed);
                     data_temperature[14:0] = $dist_uniform(seed, 0, 900); // -90.0-90.0°C
                     seed = $urandom(seed);
                     data_temperature[15] = $dist_uniform(seed, 0, 1); // sign
-                    data_parity = data_humidity[15:8] + data_humidity[7:0] + data_temperature[15:8] + data_temperature[7:0];
-                    generate_dht22_data(data_humidity, data_temperature, data_parity);
+                    data_parity = data_humidity[15:8] + data_humidity[7:0] + 
+                            data_temperature[15:8] + data_temperature[7:0];
+                    agent_dht22_h.generate_dht22_data(data_humidity, data_temperature, data_parity);
                 end
 
             end

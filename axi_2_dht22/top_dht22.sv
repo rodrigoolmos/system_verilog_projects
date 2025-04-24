@@ -4,11 +4,12 @@ module top_dht22 #(
     input  logic clk,
     input  logic arstn,
     input  logic start_read,
-    inout  logic dht22_in_out,
+    inout logic dht22_in_out,
     output logic data_ready,
     output logic sys_idle,
     output logic[2:0][3:0] humidity_bcd,
     output logic negativo_temp,
+    output logic [7:0] parity,
     output logic[2:0][3:0] temperature_bcd
 );
 
@@ -17,7 +18,6 @@ module top_dht22 #(
     logic correct_data;
     logic [15:0] humidity;
     logic [15:0] temperature;
-    logic [7:0] parity;
     logic data_ready_ff;
 
     dht22_driver #(.CLK_FREQ(CLK_FREQ))
