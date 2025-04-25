@@ -1,25 +1,34 @@
 `timescale 1ns/1ps
 `include "agent_axi_lite_master.sv"
+`include "agent_dht22.sv"
 
 module tb_axi_2_dht22;
 
     // Parámetros del testbench         
     localparam DATA_WIDTH   = 32;                   // AXI DATA WIDTH
-    localparam ADDR_WIDTH   = 32;                   // AXI ADDRESS WIDTH
+    localparam ADDR_WIDTH   = 4 ;                   // AXI ADDRESS WIDTH
     localparam CLK_PERIOD   = 10;                   // Período reloj 100 MHz
     localparam WORD_LENGHT  = (DATA_WIDTH/8);       // WORD LENGHT
     localparam NUM_DATA     = 4;
+    localparam MAX_TEST     = 40;                   // Número de test a realizar
+
+    localparam REG_BCD_HUMIDITY     = 4'h0;
+    localparam REG_BCD_TEMPERATURE  = 4'h4;
+    localparam REG_CRC              = 4'h8;
+    localparam REG_STATUS           = 4'hC;
 
 
     // TB Signals
-    logic [DATA_WIDTH-1:0]       send_data[NUM_DATA-1:0] = '{
-                                    {32'hDEADBEEF},
-                                    {32'hBAADF00D},
-                                    {32'hFEEDFACE},
-                                    {32'h0BADC0DE}};
+    logic[15:0] data_humidity[MAX_TEST-1:0];
+    logic[15:0] data_temperature[MAX_TEST-1:0];
+    logic[7:0]  data_parity[MAX_TEST-1:0];
+    int unsigned seed = 32'hDEADBEEF;
+    logic [DATA_WIDTH-1:0]       bcd_humidity;
+    logic [DATA_WIDTH-1:0]       bcd_temperature;
+    logic [DATA_WIDTH-1:0]       crc;
+    logic [DATA_WIDTH-1:0]       status;
 
-    logic [DATA_WIDTH-1:0]       read_data[NUM_DATA-1:0];
-
+    logic       error_transmission;
 
     // Instancia el bus AXI
     axi_lite_if #(
@@ -27,21 +36,37 @@ module tb_axi_2_dht22;
         .AXI_DATA_WIDTH(DATA_WIDTH)
     ) axi_vif();
 
-    apb_checker #(
+    // Instancia el bus DHT22
+    dht22_if    dht22_vif();
+
+    // Instancia el checker DHT22
+    checker_dht22 checker_dht22_ins(dht22_vif, error_transmission);
+
+    // Instancia el checker AXI
+    axi_checker #(
         .AXI_ADDR_WIDTH(ADDR_WIDTH),
         .AXI_DATA_WIDTH(DATA_WIDTH)
-    ) axi_checker (
+    ) axi_checker_ins(
         .axi_lite(axi_vif)
     );
 
     // Class Agent AXI (virtual master)
-    agent_AXI_m axi_master;
+    agent_AXI_m #(
+        .AXI_ADDR_WIDTH(ADDR_WIDTH),
+        .AXI_DATA_WIDTH(DATA_WIDTH)
+    )axi_master;
+
+    // Instancia el agente DHT22
+    agent_dht22 agent_dht22_h;
+
+    // Pull-up virtual sobre la señal dht22_in_out
+    pullup(dht22_vif.dht22_in_out);
 
     //DUT
-    axi_lite_template_slave # (
-		.AXI_DATA_WIDTH(DATA_WIDTH),
-		.AXI_ADDR_WIDTH(ADDR_WIDTH)
-    ) axi_lite_template_slave_ins (
+    axi_2_dht22 #(
+        .CLK_FREQ(100_000_000), // 100 MHz
+        .SIMULATION(1)
+    ) axi_2_dht22_ins (
 		.S_AXI_ACLK(axi_vif.S_AXI_ACLK),
 		.S_AXI_ARESETN(axi_vif.S_AXI_ARESETN),
 		.S_AXI_AWADDR(axi_vif.S_AXI_AWADDR),
@@ -63,9 +88,52 @@ module tb_axi_2_dht22;
 		.S_AXI_RRESP(axi_vif.S_AXI_RRESP),
 		.S_AXI_RVALID(axi_vif.S_AXI_RVALID),
 		.S_AXI_RREADY(axi_vif.S_AXI_RREADY),
-        .dht22_in_out(dht22_in_out)
+        .dht22_in_out(dht22_vif.dht22_in_out)
         );
 
+    function void correct_data_read();
+        int index;
+        int unsigned humidity_decimal;
+        int unsigned humidity_unidades;
+        int unsigned humidity_decenas;
+        int unsigned temperature_decimal;
+        int unsigned temperature_unidades;
+        int unsigned temperature_decenas;
+        logic signo_temp;
+
+        humidity_decimal = data_humidity[index] % 10;
+        humidity_unidades = (data_humidity[index] / 10) % 10;
+        humidity_decenas = (data_humidity[index] / 100) % 10;
+
+        signo_temp = data_temperature[index][15];
+        temperature_decimal = data_temperature[index][14:0] % 10;
+        temperature_unidades = (data_temperature[index][14:0] / 10) % 10;
+        temperature_decenas = (data_temperature[index][14:0] / 100) % 10;
+
+        if (humidity_decimal == bcd_humidity[3:0] &&
+            humidity_unidades == bcd_humidity[7:4] &&
+            humidity_decenas == bcd_humidity[11:8] &&
+            temperature_decimal == bcd_temperature[3:0] &&
+            temperature_unidades == bcd_temperature[7:4] &&
+            temperature_decenas == bcd_temperature[11:8] &&
+            bcd_temperature[12] == signo_temp) begin
+
+                $display("Test passed number %0d", index);
+            end else begin
+                $display("Test failed"); 
+                $display("SENDED ->  data_humidity: %0d %0d %0d data_temperature: %0d %0d %0d", 
+                                    humidity_decimal, humidity_unidades, humidity_decenas,
+                                    temperature_decimal, temperature_unidades, temperature_decenas);
+                $display("RECIVED -> data_humidity: %0d %0d %0d data_temperature: %0d %0d %0d",
+                        bcd_humidity[3:0],bcd_humidity[7:4],bcd_humidity[11:8],
+                        bcd_temperature[3:0],bcd_temperature[7:4],bcd_temperature[11:8]);
+                $display("SENDED ->  negativo_temp: %0d", signo_temp);
+                $display("RECIVED -> negativo_temp: %0d", bcd_temperature[12]);
+            $stop;
+        end
+        index++;
+    endfunction
+        
     // Generación del reloj (pclk)
     initial begin
         axi_vif.S_AXI_ACLK = 0;
@@ -89,40 +157,68 @@ module tb_axi_2_dht22;
         axi_vif.S_AXI_ARVALID = 0;
         axi_vif.S_AXI_RREADY = 0;
         axi_master = new(axi_vif);
+        agent_dht22_h = new(dht22_vif);
+
+        for (int i=0; i<MAX_TEST; ++i) begin
+            seed = $urandom(seed);
+            data_humidity[i] = $dist_uniform(seed, 0, 999); // 0-99.9%
+            seed = $urandom(seed);
+            data_temperature[i][14:0] = $dist_uniform(seed, 0, 900); // -90.0-90.0°C
+            seed = $urandom(seed);
+            data_temperature[i][15] = $dist_uniform(seed, 0, 1); // sign
+            data_parity[i] = data_humidity[i][15:8] + data_humidity[i][7:0] + 
+                                data_temperature[i][15:8] + data_temperature[i][7:0];
+        end
 
         repeat (20) @(posedge axi_vif.S_AXI_ACLK);
         axi_vif.S_AXI_ARESETN = 1;
 
     end
-
+    
     // PRICIPAL THREAD
     initial begin
+        error_transmission = 0;
 
         // Espera a que el reset se complete
         @(posedge axi_vif.S_AXI_ARESETN);
         @(posedge axi_vif.S_AXI_ACLK);
+        #10ms @(posedge axi_vif.S_AXI_ACLK);
 
-        // Realiza unas escrituras prueba
-        for (int data_i=0; data_i<NUM_DATA; ++data_i) begin
-            axi_master.write_AXI_data(send_data[data_i], 32'h00000000 + 
-                                            data_i*WORD_LENGHT, 4'b1111);
-            
-        end
+        fork
+            begin // interface of control
+                for (int i=0; i<MAX_TEST; ++i) begin
+                    #20ms @(posedge axi_vif.S_AXI_ACLK);
+                    axi_master.read_AXI_data(bcd_humidity, 32'h00000000 + REG_BCD_HUMIDITY);
+                    axi_master.read_AXI_data(bcd_temperature, 32'h00000000 + REG_BCD_TEMPERATURE);
+                    axi_master.read_AXI_data(crc, 32'h00000000 + REG_CRC);
+                    axi_master.read_AXI_data(status, 32'h00000000 + REG_STATUS);
+                    if (!error_transmission) begin
+                        correct_data_read();
+                        i--;
+                    end
+                end
+            end
 
-        // Realiza unas lecturas prueba
-        for (int data_i=0; data_i<NUM_DATA; ++data_i) begin
-            axi_master.read_AXI_data(read_data[data_i], 32'h00000000 + 
-                                            data_i*WORD_LENGHT);
-        end
-        
-        // Verifica que los datos leídos son correctos
-        for (int data_i=0; data_i<NUM_DATA; ++data_i) begin
-            assert (read_data[data_i] == send_data[data_i]) else
-                $error("Error: Data mismatch at index %0d, expected %0h, got %0h",
-                             data_i, send_data[data_i], read_data[data_i]);
-        end
+            begin // dth22 emulation
+                for (int i=0; i<MAX_TEST/2; ++i) begin
+                    agent_dht22_h.generate_dht22_data(data_humidity[i], 
+                                        data_temperature[i], data_parity[i]);
+                end
+                error_transmission = 1;
+                agent_dht22_h.generate_dht22_error(data_humidity[0], 
+                                        data_temperature[0], data_parity[0]);
+                error_transmission = 0;
 
-        #3000;
+                for (int i=MAX_TEST/2; i<MAX_TEST; ++i) begin
+                    agent_dht22_h.generate_dht22_data(data_humidity[i], 
+                                        data_temperature[i], data_parity[i]);
+                end
+            end
+
+
+
+        join_any
+        #10ms @(posedge axi_vif.S_AXI_ACLK);
         $finish;
     end
 

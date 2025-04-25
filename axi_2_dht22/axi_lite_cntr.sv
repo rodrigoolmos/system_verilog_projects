@@ -60,9 +60,7 @@ module axi_lite_cntr #
 	//------------------------------------------------
 	//-- Number of Slave Registers 4
 	logic	                    slv_reg_rden;
-	logic	                    slv_reg_wren;
 	logic [AXI_DATA_WIDTH-1:0]	reg_data_out;
-	integer	                    byte_index;
 	logic	                    aw_en;
 
 	// I/O Connections assignments
