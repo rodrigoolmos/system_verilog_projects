@@ -15,7 +15,8 @@ interface dht22_if;
 endinterface
 
 module checker_dht22(
-    dht22_if dht22_vif
+    dht22_if dht22_vif,
+    input logic error
 );
     real t_rise, t_fall;
     typedef enum logic[1:0] {start, data, idle} dht22_state_t;
@@ -25,34 +26,34 @@ module checker_dht22(
         dht22_state = idle;
 
         forever begin
-            case (dht22_state)
-                idle: begin
-                    @(negedge dht22_vif.dht22_in_out);
-                    t_fall = $realtime;
-                    dht22_state = start;
-                end
-                start: begin
-                    @(posedge dht22_vif.dht22_in_out);
-                    t_rise = $realtime;
-                    dht22_state = data;
-                    $display("DHT22 start time: %0.3f ns", t_rise - t_fall);
-                    assert (t_rise - t_fall > 1000_000) else begin
-                        $error("Error: DHT22 start signal is too short");
-                    end
-                end
-                data: begin
-                    for (int i=0; i<42; ++i) begin
+            if (error) begin
+                dht22_state = idle;
+                #1;
+            end else begin
+                case (dht22_state)
+                    idle: begin
                         @(negedge dht22_vif.dht22_in_out);
                         t_fall = $realtime;
+                        dht22_state = start;
+                    end
+                    start: begin
                         @(posedge dht22_vif.dht22_in_out);
                         t_rise = $realtime;
-                        if (t_rise - t_fall > 1000_000) begin
-                            i = 0;
+                        dht22_state = data;
+                        $display("DHT22 start time: %0.3f ns", t_rise - t_fall);
+                        assert (t_rise - t_fall > 1000_000) else begin
+                            $error("Error: DHT22 start signal is too short");
                         end
                     end
-                    dht22_state = idle;
-                end
-            endcase
+                    data: begin
+                        for (int i=0; i<42; ++i) begin
+                            @(negedge dht22_vif.dht22_in_out);
+                            @(posedge dht22_vif.dht22_in_out);
+                        end
+                        dht22_state = idle;
+                    end
+                endcase 
+            end
         end
     end
 

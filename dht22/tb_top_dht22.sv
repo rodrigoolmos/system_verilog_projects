@@ -27,7 +27,7 @@ module tb_top_dht22;
     agent_dht22 agent_dht22_h;
     dht22_if    dht22_vif();
 
-    checker_dht22 checker_dht22_ins(dht22_vif);
+    checker_dht22 checker_dht22_ins(dht22_vif, error_transmission);
 
     // Pull-up virtual sobre la señal SDA
     pullup(dht22_vif.dht22_in_out);
