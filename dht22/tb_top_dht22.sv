@@ -29,7 +29,7 @@ module tb_top_dht22;
 
     checker_dht22 checker_dht22_ins(dht22_vif, error_transmission);
 
-    // Pull-up virtual sobre la señal SDA
+    // Pull-up virtual sobre la señal dht22_in_out
     pullup(dht22_vif.dht22_in_out);
 
     function integer correct_data_read();
